@@ -8,8 +8,8 @@
     <meta name="description" content="Simulador de circuitos em tempo real no navegador, com a usabilidade do simulador do Prof. Falstad e modelos SPICE (.model e .subckt) para os componentes.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261118a">
-    <link rel="stylesheet" href="css/simulador.css?v=20261118a">
+    <link rel="stylesheet" href="css/style.css?v=20261118b">
+    <link rel="stylesheet" href="css/simulador.css?v=20261118b">
 </head>
 <body>
     <header class="topbar">
@@ -56,7 +56,9 @@
                             <button type="button" class="btn btn-secondary btn-sm" data-acao="refazer" title="Refazer (Ctrl+Y)">↷</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-acao="zoom-menos" title="Diminuir">−</button>
                             <button type="button" class="btn btn-secondary btn-sm" data-acao="zoom-mais" title="Aumentar">+</button>
-                            <button type="button" class="btn btn-secondary btn-sm" data-acao="centralizar" title="Enquadrar o circuito">⤢</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="centralizar" title="Ir até o circuito e enquadrar (tecla f)">⤢</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="area-grande" title="Área de trabalho grande: esconde o painel da direita">▭</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="tela-cheia" title="Tela cheia">⛶</button>
                         </span>
                     </section>
 
@@ -67,14 +69,22 @@
                                 <div class="sim-hover" id="hover" hidden></div>
                                 <ul class="sim-avisos" id="avisos" hidden></ul>
                                 <p class="sim-modo" id="modo"></p>
+                                <div class="sim-zoom" aria-label="Zoom">
+                                    <button type="button" data-acao="zoom-mais" title="Aproximar (+)">+</button>
+                                    <button type="button" data-acao="zoom-menos" title="Afastar (−)">−</button>
+                                    <button type="button" data-acao="centralizar" title="Enquadrar o circuito">⤢</button>
+                                </div>
                             </div>
                             <section class="card sim-osc-card" aria-label="Osciloscópio">
                                 <div class="card-topo">
                                     <h2>📈 Osciloscópio</h2>
                                     <span class="osc-controles">
-                                        <label class="sim-campo">1 ponto a cada
-                                            <select id="osc-n"><option>1</option><option>2</option><option selected>5</option><option>10</option><option>20</option><option>50</option><option>100</option><option>500</option></select> passos</label>
-                                        <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-limpar">Limpar</button>
+                                        <label class="sim-campo">Tempo <select id="osc-tdiv" title="Tempo por divisão (10 divisões na tela)"></select></label>
+                                        <label class="sim-campo">Disparo <select id="osc-trig" title="Disparo pelo 1º traço"><option value="livre">livre</option><option value="subida">subida</option><option value="descida">descida</option></select></label>
+                                        <label class="sim-campo">Nível <input id="osc-nivel" type="text" size="5" placeholder="auto" title="Nível do disparo (vazio = meio do sinal); aceita sufixo SPICE" spellcheck="false"></label>
+                                        <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-congelar">❄ Congelar</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-apagar" title="Apaga as curvas e recomeça">⌫ Apagar</button>
+                                        <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-limpar" title="Tira todos os traços">Tirar todos</button>
                                     </span>
                                 </div>
                                 <div class="osc-tracos" id="osc-traços"></div>
@@ -118,7 +128,7 @@
                                     <li>Pinos que se tocam na grade ficam ligados; ponto preto = nó com 3 ou mais ligações; círculo vermelho = pino solto.</li>
                                     <li>Verde = tensão positiva, vermelho = negativa; os pontos amarelos andam com a corrente.</li>
                                     <li>Clique na chave para abrir/fechar. Passe o mouse para ver tensão, corrente e potência.</li>
-                                    <li>Arraste no fundo para selecionar uma área (<kbd>Shift</kbd> soma); botão direito, do meio ou <kbd>Alt</kbd>+arrastar movem a vista; roda do mouse aproxima.</li>
+                                    <li><b>Arraste o fundo</b> para mover a vista; <b>roda do mouse</b> (ou pinça com dois dedos) aproxima; <b>⤢</b> leva até o circuito. <kbd>Shift</kbd>+arrastar seleciona uma área. A borda de baixo da área de trabalho pode ser puxada para aumentar a altura; ▭ e ⛶ ampliam.</li>
                                 </ul>
                                 <details class="bib-det">
                                     <summary>Atalhos do teclado (os mesmos do Falstad)</summary>
@@ -137,6 +147,7 @@
                                         <tr><td><kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>X</kbd>/<kbd>V</kbd></td><td>copiar/recortar/colar</td><td><kbd>Ctrl</kbd>+<kbd>D</kbd></td><td>duplicar</td></tr>
                                         <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd>/<kbd>O</kbd></td><td>salvar/abrir</td><td><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></td><td>zoom, 100 %</td></tr>
                                         <tr><td><kbd>/</kbd></td><td>buscar na biblioteca</td><td><kbd>Ctrl</kbd>+arrastar</td><td>esticar a ponta</td></tr>
+                                        <tr><td><kbd>f</kbd></td><td>enquadrar o circuito</td><td>arrastar o fundo</td><td>mover a vista</td></tr>
                                         <tr><td><kbd>Shift</kbd>+<kbd>R</kbd></td><td>girar (extra)</td><td><kbd>Shift</kbd>+clique</td><td>somar à seleção</td></tr>
                                     </table>
                                 </details>
@@ -172,14 +183,14 @@
 
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/spice.js?v=20261118a"></script>
-    <script src="js/motor.js?v=20261118a"></script>
-    <script src="js/componentes.js?v=20261118a"></script>
-    <script src="js/biblioteca.js?v=20261118a"></script>
-    <script src="js/circuito.js?v=20261118a"></script>
-    <script src="js/modelos-embutidos.js?v=20261118a"></script>
-    <script src="js/exemplos.js?v=20261118a"></script>
-    <script src="js/editor.js?v=20261118a"></script>
-    <script src="js/app.js?v=20261118a"></script>
+    <script src="js/spice.js?v=20261118b"></script>
+    <script src="js/motor.js?v=20261118b"></script>
+    <script src="js/componentes.js?v=20261118b"></script>
+    <script src="js/biblioteca.js?v=20261118b"></script>
+    <script src="js/circuito.js?v=20261118b"></script>
+    <script src="js/modelos-embutidos.js?v=20261118b"></script>
+    <script src="js/exemplos.js?v=20261118b"></script>
+    <script src="js/editor.js?v=20261118b"></script>
+    <script src="js/app.js?v=20261118b"></script>
 </body>
 </html>

@@ -22,6 +22,18 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 7 [resolvido 18/11/2026] Exportar netlist SPICE (.cir) com modelos e subcircuitos usados; salvar/abrir .json; guarda no navegador.
 18 [resolvido 18/11/2026] Amp-op com modelo SPICE desenhado com o triângulo da bibliografia (− em cima, + embaixo, V+/V− em cima/embaixo); reconhece os pinos pelos nomes; opção de caixa retangular.
 19 [resolvido 18/11/2026] Atalhos do teclado do Falstad (w r c L s v V g d z l a n p N P, Esc/Espaço, Delete, setas, Ctrl+Z/Y/C/X/V/D/A/S/O, + − 0, /), seleção por área, Shift+clique, Alt/direito movem a vista, Ctrl+arrastar ponta. Fonte de corrente ficou sem tecla (no Falstad o i é entrada lógica).
+20 [resolvido 18/11/2026] Não idealidades em todos os componentes, com padrão ideal e ajustáveis (bloco "Não idealidades" nas propriedades):
+   fio R; resistor ESL e C paralela; capacitor ESR, ESL e fuga; indutor DCR, C entre espiras e perdas no núcleo; fonte de tensão e trilho R interna;
+   fonte de corrente R paralela; chave Ron/Roff; voltímetro R de entrada; amp-op Rin, Rout, GBW, slew rate, offset e corrente de polarização;
+   diodo/LED/zener/BJT/MOSFET com "ajustes do modelo" (RS, CJO, RB/RC/RE, CJE/CJC, RD/RS, CGS/CGD...). As capacitâncias e resistências série
+   do .model passam a valer no tempo real (capacitâncias como lineares). O netlist SPICE leva tudo.
+21 [resolvido 18/11/2026] Bug: página "tremia" ao abrir (largura do canvas posta pelo JS + texto do tempo mudando a quebra da barra). Canvas agora só pelo CSS e tempo com largura fixa.
+22 [resolvido 18/11/2026] Bug: LEDs de cores diferentes. Sem modelo, a cor define a tensão direta típica (vermelho 1,8 V ... branco 3,1 V); brilho visível a partir de ~1 mA.
+23 [resolvido 18/11/2026] Área de trabalho: arrastar o fundo move a vista (Shift+arrastar seleciona), roda/pinça aproxima, botões +, −, ⤢ na tela, tecla f enquadra, borda puxável, área grande e tela cheia.
+24 [resolvido 18/11/2026] Osciloscópio: tempo/div, disparo (subida/descida e nível), congelar, apagar; por traço: grandeza (V, I, P), escala/div, posição e medidas (pp, média, RMS, frequência).
+   Bug da corrente: traços novos começavam na esquerda, fora do tempo dos outros; agora todos alinhados no mesmo instante.
+   Tensão dos bipolos como no Falstad: v(p0) − v(p1) (fontes e voltímetro: + em p1).
+25 [resolvido 18/11/2026] Amp-op: saturação por região (linear/saturado) como no Falstad, sem oscilar no Newton.
 8 [resolvido 18/11/2026] Biblioteca de exemplo (modelos/basicos.lib) e 5 exemplos: RC, retificador, LED, emissor comum, amp-op inversor com .subckt.
 
 === O QUE FALTA
@@ -29,14 +41,14 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 10 [fazer] Microcontrolador, modo A: C compilado no navegador para WebAssembly (clang em vendor/), firmware num Web Worker sincronizado com o tempo simulado.
 11 [fazer] Microcontrolador, modo B: emulação do ATmega328P (avr8js, MIT) rodando .hex do Arduino; depois RP2040 (rp2040js).
 12 [fazer] ngspice em WebAssembly (vendor/, Web Worker): .op sobre o desenho, Bode (.ac), curva DC, ruído, Fourier/THD, .step, temperatura, Monte Carlo.
-13 [fazer] Capacitâncias de junção (CJO, CJE, CJC, TT) no tempo real.
+13 [resolvido 18/11/2026] Capacitâncias de junção (CJO, CJE, CJC) e resistências série no tempo real, como capacitores lineares (falta a dependência com a tensão e TT).
 14 [fazer] Mais componentes: potenciômetro, transformador, lâmpada, relé, portas lógicas, fonte PWL, amperímetro.
 15 [futuro] Abrir pasta com a File System Access API (lembrar a pasta entre sessões) e pasta de modelos na nuvem MEGA da equipe.
 16 [futuro] Importar o formato de texto do Falstad (circuitjs) para reaproveitar circuitos prontos.
 17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
 
 === QA (18/11/2026)
-- node tests/testes.js: 26 de 26 passaram (símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- node tests/testes.js: 38 de 38 passaram (não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
 - Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
   "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

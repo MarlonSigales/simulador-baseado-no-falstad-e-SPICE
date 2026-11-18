@@ -23,6 +23,9 @@ code { font-family: Consolas, monospace; font-size: 0.85em; background: var(--ve
 .sim-campo { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; color: var(--suave); white-space: nowrap; }
 .sim-campo select, .sim-campo input[type=text] { font: inherit; font-size: 0.85rem; padding: 0.25rem 0.35rem; border: 1px solid var(--borda); border-radius: 6px; color: var(--texto); background: #fff; }
 .sim-campo b { color: var(--teal); font-variant-numeric: tabular-nums; }
+/* largura fixa para o tempo e a razão: o texto muda a cada quadro e não pode mudar a quebra de linha da barra (a página "tremia") */
+#tempo-sim { display: inline-block; min-width: 6.5em; }
+#razao { display: inline-block; min-width: 5.5em; font-variant-numeric: tabular-nums; }
 .sim-campo input[type=range] { width: 90px; accent-color: var(--verde); }
 .sim-sep { flex: 1 1 auto; }
 .sim-grupo { display: inline-flex; gap: 0.25rem; }
@@ -33,11 +36,20 @@ code { font-family: Consolas, monospace; font-size: 0.85em; background: var(--ve
 .sim-direita { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; }
 .sim-direita .card { margin: 0; padding: 0.85rem; }
 .sim-tela-card { position: relative; padding: 0 !important; overflow: hidden; margin: 0; }
-.sim-tela { height: clamp(360px, 62vh, 900px); touch-action: none; }
-.sim-tela canvas { display: block; }
+.sim-tela { height: clamp(360px, 62vh, 900px); min-height: 260px; touch-action: none; resize: vertical; } /* puxe a borda de baixo */
+.sim-zoom { position: absolute; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 4px; }
+.sim-zoom button { width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--borda); background: rgba(255,255,255,.92); color: var(--teal); font: 700 1rem/1 inherit; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.sim-zoom button:hover { background: var(--verde-claro); }
+body.area-grande .sim-grade { grid-template-columns: 1fr; }
+body.area-grande .sim-direita { display: none; }
+body.area-grande .sim-tela { height: calc(100vh - 170px); }
+.sim-tela-card:fullscreen { background: #fbfdfc; display: flex; flex-direction: column; }
+.sim-tela-card:fullscreen .sim-tela { flex: 1; height: auto; resize: none; }
+.sim-tela { position: relative; overflow: hidden; }
+.sim-tela canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; } /* não interfere no layout */
 .sim-hover { position: absolute; left: 8px; bottom: 30px; background: rgba(8,83,87,.92); color: #fff; font-size: 0.8rem; padding: 0.4rem 0.6rem; border-radius: 6px; pointer-events: none; max-width: calc(100% - 16px); line-height: 1.4; }
 .sim-modo { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 0.25rem 0.6rem; font-size: 0.78rem; color: var(--suave); background: rgba(244,247,246,.92); border-top: 1px solid var(--borda); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sim-avisos { position: absolute; top: 8px; left: 8px; right: 8px; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40%; overflow: auto; }
+.sim-avisos { position: absolute; top: 8px; left: 8px; right: 52px; list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40%; overflow: auto; }
 .sim-avisos li { background: #fff8e1; border: 1px solid #f0d58a; color: #6b5200; font-size: 0.8rem; padding: 0.3rem 0.55rem; border-radius: 6px; }
 .sim-avisos li.erro { background: #fdecea; border-color: #f2b8b5; color: var(--perigo); font-weight: 600; }
 
@@ -48,8 +60,17 @@ code { font-family: Consolas, monospace; font-size: 0.85em; background: var(--ve
 .osc-tracos { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0; min-height: 1.6rem; font-size: 0.85rem; }
 .osc-chip { display: inline-flex; align-items: center; gap: 0.3rem; border: 1px solid var(--c); color: var(--texto); border-left: 6px solid var(--c); border-radius: 12px; padding: 1px 4px 1px 8px; font-size: 0.8rem; }
 .osc-chip button { border: 0; background: none; cursor: pointer; color: var(--suave); }
-.osc-tela { height: 200px; border-radius: 6px; overflow: hidden; }
-.osc-tela canvas { display: block; }
+.osc-tabela { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.osc-tabela th { text-align: left; color: var(--suave); font-weight: 600; padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+.osc-tabela td { padding: 0.2rem 0.3rem; border-bottom: 1px solid var(--borda); vertical-align: middle; }
+.osc-tabela select, .osc-tabela input { font: inherit; font-size: 0.8rem; padding: 0.15rem 0.25rem; border: 1px solid var(--borda); border-radius: 5px; background: #fff; }
+.osc-tabela input[type=number] { width: 4.2em; }
+.osc-cor { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+.osc-medidas { font-variant-numeric: tabular-nums; color: var(--teal); white-space: nowrap; min-width: 17em; }
+.osc-tracos { overflow-x: auto; }
+.osc-tela { height: 240px; border-radius: 6px; overflow: hidden; }
+.osc-tela { position: relative; }
+.osc-tela canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
 /* propriedades */
 .prop-topo { display: flex; gap: 0.5rem; align-items: baseline; margin-bottom: 0.5rem; }
@@ -61,6 +82,10 @@ code { font-family: Consolas, monospace; font-size: 0.85em; background: var(--ve
 .campo input:focus, .campo select:focus, .bib-busca:focus, textarea:focus { outline: 2px solid var(--limao); border-color: var(--verde); }
 .campo-bool { flex-direction: row; align-items: center; gap: 0.4rem; }
 .link-botao { font: inherit; font-size: 0.8rem; border: 0; background: none; color: var(--verde-escuro); cursor: pointer; text-align: left; padding: 0; text-decoration: underline; }
+.nao-ideal { margin: 0.2rem 0 0.6rem; padding: 0.45rem 0.6rem; border: 1px dashed #cfe5dd; border-radius: 6px; background: #fbfdfc; }
+.nao-ideal summary { cursor: pointer; font-weight: 600; color: var(--verde-escuro); font-size: 0.88rem; }
+.nao-ideal .muted { font-size: 0.78rem; margin: 0.3rem 0 0.4rem; }
+.dica-campo { display: block; margin: -0.35rem 0 0.5rem; color: #8a9997; font-size: 0.74rem; }
 .leitura { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.7rem; font-size: 0.85rem; margin: 0.5rem 0; padding: 0.5rem 0.6rem; background: var(--verde-claro); border-radius: 6px; }
 .leitura dt { color: var(--suave); }
 .leitura dd { margin: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--teal); text-align: right; }

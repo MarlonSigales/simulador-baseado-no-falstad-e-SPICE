@@ -16,9 +16,11 @@ HTML, CSS e JavaScript puros, sem servidor e sem bibliotecas externas.
   1 terminal, `g` terra, `d` diodo, `z` zener, `l` LED, `a` amp-op, `n`/`p` NPN/PNP, `N`/`P` MOSFET, `Esc`/`Espaço`
   selecionar, `Delete`, setas, `Ctrl+Z/Y/C/X/V/D/A/S/O`, `+`/`−`/`0` zoom, `/` busca; seleção por área, `Shift`+clique,
   `Alt`/botão direito para mover a vista, `Ctrl`+arrastar para esticar a ponta. Extras do app: `x` Caixa SPICE, `m` voltímetro, `Shift+R` girar.
+- **Não idealidades ajustáveis** (padrão = ideal): resistências série/paralelo, ESR/ESL, fuga, DCR, Ron/Roff, resistência interna
+  das fontes, Rin/Rout/GBW/slew rate/offset/polarização do amp-op e ajustes dos modelos SPICE dos semicondutores.
 - **Simulação ativa em tempo real**, com velocidades programadas (tempo real, 0,1×, 0,01×, 0,001×, 0,0001×, máxima), passo de
   tempo ajustável, pausar, avançar um passo e reiniciar.
-- **Osciloscópio** com até 4 traços (tensão ou corrente de qualquer componente), escala automática e base de tempo ajustável.
+- **Osciloscópio** com até 4 traços (tensão, corrente ou potência), tempo/div, disparo, escala e posição por traço, congelar e medidas (pp, média, RMS, frequência).
 - **Componentes:** fio, resistor, capacitor, indutor, chave, fonte de tensão (contínua, senoidal, quadrada), trilho +V, fonte de
   corrente, terra, diodo, zener, LED (acende com a corrente), NPN, PNP, MOSFET N e P, amp-op ideal, Caixa SPICE (amp-op com o triângulo da bibliografia) e voltímetro.
 - **Modelos SPICE de verdade no tempo real:** diodo (IS, N, RS, BV, IBV), BJT (IS, BF, BR, NF, NR, VAF), MOSFET nível 1
@@ -42,7 +44,7 @@ Para modelos só seus, sem publicar: botão **📁 Abrir pasta de modelos** no p
 
 ## Testes
 
-`node tests/testes.js` (26 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
+`node tests/testes.js` (38 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
 
 ## Arquivos
 

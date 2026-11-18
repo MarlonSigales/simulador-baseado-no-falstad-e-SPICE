@@ -108,7 +108,7 @@
                     p.beta = p.m.KP * (p.W || p.m.W || 1) / (p.L || p.m.L || 1);
                     this.naoLineares = true;
                 }
-                if (p.tipo === 'OP') this.naoLineares = true;
+                if (p.tipo === 'OP' || p.tipo === 'RLIM') this.naoLineares = true;
                 if (p.tipo === 'C' || p.tipo === 'L') {
                     const e = estadoAnterior && estadoAnterior[p.nome];
                     p.vant = e ? e.v : 0; p.iant = e ? e.i : 0;
@@ -171,7 +171,14 @@
                 const [p, q, c, d] = e.nos;
                 switch (e.tipo) {
                     case 'R': cond(p, q, 1 / Math.max(e.valor, 1e-9)); break;
-                    case 'SW': cond(p, q, e.ligada ? 1 / (e.ron || 0.01) : 1 / (e.roff || 1e9)); break;
+                    case 'SW': cond(p, q, this.gChave(e)); break;
+                    case 'RLIM': {
+                        // resistor com corrente limitada (usado no slew rate): i = Imax·tanh(v/(R·Imax))
+                        const v = this.v(p) - this.v(q), th = Math.tanh(v / (e.valor * e.imax));
+                        const i = e.imax * th, g = (1 - th * th) / e.valor + GMIN;
+                        cond(p, q, g); fonteI(p, q, i - g * v);
+                        break;
+                    }
                     case 'C': { const g = 2 * e.valor / dt; e.geq = g; e.J = g * e.vant + e.iant; cond(p, q, g); fonteI(p, q, -e.J); break; }
                     case 'L': { const g = dt / (2 * e.valor); e.geq = g; e.J = -(e.iant + g * e.vant); cond(p, q, g); fonteI(p, q, -e.J); break; }
                     case 'I': fonteI(p, q, valorFonte(e.fonte, t)); break;
@@ -197,14 +204,18 @@
                     case 'Q': this.estampaBJT(e, iter, a, b); break;
                     case 'M': this.estampaMOS(e, a, b); break;
                     case 'OP': {
-                        // amp-op ideal com saturação suave: v(out) = meio + meia·tanh(A·vd/meia)
-                        const [out, ip, im] = e.nos, k = N + e.ramo;
-                        const vd = this.v(ip) - this.v(im);
-                        const meio = (e.vmax + e.vmin) / 2, meia = (e.vmax - e.vmin) / 2;
-                        const th = Math.tanh(e.ganho * vd / meia);
-                        const f0 = meio + meia * th, df = e.ganho * (1 - th * th);
-                        ar(out, k, 1); ra(k, out, 1); ra(k, ip, -df); ra(k, im, df);
-                        b[k] = f0 - df * vd;
+                        // amp-op: linear (v(out) = A·(vd + Vos)) ou saturado (v(out) = Vmax/Vmin), como no Falstad.
+                        // A região sai da iteração anterior; do linear vai para a saturação se a saída passou do trilho,
+                        // e da saturação só volta para o linear (nunca pula de +Vsat para −Vsat), o que evita oscilar no Newton.
+                        const [out, ip, im] = e.nos, k = N + e.ramo, A = e.ganho, vos = e.vos || 0;
+                        const vd = this.v(ip) - this.v(im) + vos, vo = this.v(out);
+                        if (e.reg === undefined) e.reg = 0;
+                        if (e.reg === 0) { if (vo > e.vmax + 1e-9) e.reg = 1; else if (vo < e.vmin - 1e-9) e.reg = -1; }
+                        else if (e.reg === 1) { if (A * vd < e.vmax) e.reg = 0; }
+                        else if (A * vd > e.vmin) e.reg = 0;
+                        ar(out, k, 1); ra(k, out, 1);
+                        if (e.reg === 0) { ra(k, ip, -A); ra(k, im, A); b[k] = A * vos; }
+                        else b[k] = e.reg > 0 ? e.vmax : e.vmin;
                         break;
                     }
                 }
@@ -305,7 +316,8 @@
                 const v = this.v(p) - this.v(q);
                 switch (e.tipo) {
                     case 'R': e.i = v / Math.max(e.valor, 1e-9); break;
-                    case 'SW': e.i = v * (e.ligada ? 1 / (e.ron || 0.01) : 1 / (e.roff || 1e9)); break;
+                    case 'SW': e.i = v * this.gChave(e); break;
+                    case 'RLIM': e.i = e.imax * Math.tanh(v / (e.valor * e.imax)); break;
                     case 'C': case 'L': e.i = e.geq * v - e.J; e.vant = v; e.iant = e.i; break;
                     case 'I': e.i = valorFonte(e.fonte, this.t + dt); break;
                     case 'V': case 'E': case 'H': e.i = -this.x[N + e.ramo]; break; // corrente que sai pelo + (convenção de fonte)
@@ -317,6 +329,11 @@
                     case 'M': e.i = e.idr; break;
                 }
             }
+        }
+
+        gChave(e) {
+            if (e.ligada) return 1 / (e.ron > 0 ? e.ron : 1e-4);
+            return e.roff > 0 && isFinite(e.roff) ? 1 / e.roff : (e.roff === undefined ? 1e-9 : 0);
         }
 
         /** Estados de C e L por nome, para reaproveitar ao reconstruir o circuito. */

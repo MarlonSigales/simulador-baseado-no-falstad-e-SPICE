@@ -33,8 +33,11 @@
             const r = this.cv.parentElement.getBoundingClientRect();
             const dpr = window.devicePixelRatio || 1;
             this.w = Math.max(200, r.width); this.h = Math.max(200, r.height);
-            this.cv.width = Math.round(this.w * dpr); this.cv.height = Math.round(this.h * dpr);
-            this.cv.style.width = this.w + 'px'; this.cv.style.height = this.h + 'px';
+            // o tamanho na tela vem só do CSS (canvas absoluto, 100 % do pai); aqui só a resolução interna.
+            // Antes o JS punha a largura em px e, com zoom do Windows (125 %), o arredondamento fazia o layout "tremer".
+            const W = Math.round(this.w * dpr), H = Math.round(this.h * dpr);
+            if (this.cv.width !== W) this.cv.width = W;
+            if (this.cv.height !== H) this.cv.height = H;
             this.dpr = dpr;
         }
         mundo(ev) {
@@ -91,6 +94,7 @@
             cv.addEventListener('pointerdown', (ev) => this.baixo(ev));
             cv.addEventListener('pointermove', (ev) => this.mover(ev));
             cv.addEventListener('pointerup', (ev) => this.cima(ev));
+            cv.addEventListener('pointercancel', (ev) => this.cima(ev));
             cv.addEventListener('pointerleave', () => { this.mouse = null; this.app.infoHover(null); });
             cv.addEventListener('dblclick', (ev) => { const h = this.acertar(this.mundo(ev)); if (h) { this.selecionarSo(h.el); this.app.selecionou(h.el, true); } });
             cv.addEventListener('wheel', (ev) => {
@@ -111,6 +115,16 @@
 
         baixo(ev) {
             this.cv.setPointerCapture(ev.pointerId);
+            this.toques = this.toques || new Map();
+            if (ev.pointerType === 'touch') {
+                this.toques.set(ev.pointerId, [ev.clientX, ev.clientY]);
+                if (this.toques.size === 2) { // dois dedos: pinça para zoom e arrastar a vista (desfaz o que o 1º dedo começou)
+                    if (this.arrasto && this.arrasto.tipo !== 'pan' && this.app.desfazer.length) this.app.voltar(this.app.desfazer, []);
+                    const [[x1, y1], [x2, y2]] = [...this.toques.values()];
+                    this.arrasto = { tipo: 'pinca', d: Math.hypot(x2 - x1, y2 - y1), cx: (x1 + x2) / 2, cy: (y1 + y2) / 2 };
+                    return;
+                }
+            }
             const pt = this.mundo(ev), gp = this.grade(pt);
             const fer = this.ferramenta;
             // como no Falstad: botão direito/do meio ou Alt+arrastar movem a vista
@@ -141,19 +155,27 @@
                 this.arrasto = { tipo: 'mover', grupo: this.selecionados(), el: h.el, ultimo: gp, moveu: false, snapshot: JSON.stringify(this.els) };
                 return;
             }
-            // fundo: no toque move a vista; com mouse faz seleção por área (Shift soma à seleção)
-            if (ev.pointerType === 'touch') { this.selecionarSo(null); this.app.selecionou(null); this.arrasto = { tipo: 'pan', x: ev.clientX, y: ev.clientY, ox: this.vista.ox, oy: this.vista.oy }; return; }
-            const base = ev.shiftKey ? new Set(this.sels) : new Set();
-            if (!ev.shiftKey) { this.selecionarSo(null); this.app.selecionou(null); }
-            this.arrasto = { tipo: 'area', inicio: pt, atual: pt, base };
+            // fundo: arrastar move a vista; Shift+arrastar seleciona por área (como o Shift do Falstad)
+            if (ev.shiftKey) { this.arrasto = { tipo: 'area', inicio: pt, atual: pt, base: new Set(this.sels) }; return; }
+            this.selecionarSo(null); this.app.selecionou(null);
+            this.arrasto = { tipo: 'pan', x: ev.clientX, y: ev.clientY, ox: this.vista.ox, oy: this.vista.oy };
         }
 
         mover(ev) {
             const pt = this.mundo(ev), gp = this.grade(pt);
             this.mouse = pt;
+            if (this.toques && this.toques.has(ev.pointerId)) this.toques.set(ev.pointerId, [ev.clientX, ev.clientY]);
             const a = this.arrasto;
+            if (a && a.tipo === 'pinca' && this.toques.size === 2) {
+                const [[x1, y1], [x2, y2]] = [...this.toques.values()];
+                const d = Math.hypot(x2 - x1, y2 - y1), cx = (x1 + x2) / 2, cy = (y1 + y2) / 2;
+                this.vista.ox += cx - a.cx; this.vista.oy += cy - a.cy;
+                this.zoom(d / (a.d || d), { clientX: cx, clientY: cy });
+                Object.assign(a, { d, cx, cy });
+                return;
+            }
             if (!a) { const h = this.acertar(pt); this.cv.style.cursor = this.ferramenta !== 'selecionar' ? 'crosshair' : h ? (h.ponta !== undefined ? 'move' : (C.DEFS[h.el.tipo].clicavel ? 'pointer' : 'grab')) : 'default'; this.app.infoHover(h ? h.el : null, pt); return; }
-            if (a.tipo === 'pan') { this.vista.ox = a.ox + ev.clientX - a.x; this.vista.oy = a.oy + ev.clientY - a.y; return; }
+            if (a.tipo === 'pan') { this.vista.ox = a.ox + ev.clientX - a.x; this.vista.oy = a.oy + ev.clientY - a.y; this.cv.style.cursor = 'grabbing'; return; }
             if (a.tipo === 'area') {
                 a.atual = pt;
                 const x0 = Math.min(a.inicio[0], pt[0]), x1 = Math.max(a.inicio[0], pt[0]), y0 = Math.min(a.inicio[1], pt[1]), y1 = Math.max(a.inicio[1], pt[1]);
@@ -183,7 +205,9 @@
             els.forEach((e) => { if (e.p) e.p.forEach((p) => { p[0] += dx; p[1] += dy; }); else { e.pos[0] += dx; e.pos[1] += dy; } });
         }
 
-        cima() {
+        cima(ev) {
+            if (this.toques && ev) this.toques.delete(ev.pointerId);
+            if (this.arrasto && this.arrasto.tipo === 'pinca') { if (!this.toques || !this.toques.size) this.arrasto = null; return; }
             const a = this.arrasto;
             this.arrasto = null;
             if (!a) return;

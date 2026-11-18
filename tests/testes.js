@@ -215,6 +215,105 @@ teste('Caixa SPICE: ao escolher o .subckt, os pinos vêm do modelo', () => {
     ok(Comp.pinos(el, lib()).length === 3);
 });
 
+
+// ---------------------------------------------------------------- não idealidades (padrão ideal, ajustáveis)
+const montar = (els) => { const L = lib(); const e = comIds(els); const net = Circuito.construir(e, L); return { e, net, m: new Motor(net), v: (i, k) => 0 }; };
+const fonte = (V, extra = {}) => Object.assign({ tipo: 'fonteV', p: [[0, 100], [0, 0]], props: Object.assign({ forma: 'dc', V: String(V) }, extra) });
+const gnd = { tipo: 'terra', pos: [0, 100], rot: 0, props: {} };
+
+teste('Padrão de todos os componentes é ideal (0 em série, ∞ em paralelo)', () => {
+    Object.entries(Comp.DEFS).forEach(([k, d]) => (d.campos || []).filter((c) => c.ni).forEach((c) => {
+        const v = d.props[c.k];
+        ok(c.texto ? v === '' : (Comp.num(v) === 0 || Comp.num(v) === Infinity), `${k}.${c.k} = ${v}`);
+    }));
+    // circuito ideal: resistor só gera 1 primitivo
+    const r = montar([fonte(5), { tipo: 'resistor', p: [[0, 0], [0, 100]], props: { R: '1k' } }, gnd]);
+    ok(r.net.prims.filter((p) => p.dono === 'R1').length === 1);
+});
+
+teste('Fonte com resistência interna: divisor 10 V, Rint 1 kΩ, carga 1 kΩ → 5 V', () => {
+    const r = montar([fonte(10, { Rint: '1k' }), { tipo: 'resistor', p: [[0, 0], [100, 0]], props: { R: '1k' } }, { tipo: 'fio', p: [[100, 0], [100, 100]], props: {} }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]);
+    r.m.passo(1e-6);
+    perto(r.m.v(r.net.pinos.R1[0]), 5, 0.01);
+});
+
+teste('Capacitor com ESR: degrau dá corrente inicial V/(R+ESR)', () => {
+    const r = montar([fonte(10), { tipo: 'resistor', p: [[0, 0], [100, 0]], props: { R: '100' } }, { tipo: 'capacitor', p: [[100, 0], [100, 100]], props: { C: '1m', ESR: '100' } }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]);
+    r.m.passo(1e-7);
+    const i = r.m.prim(r.net.primDe.R1).i;
+    perto(i, 0.05, 0.002, 'corrente inicial');
+});
+
+teste('Capacitor com fuga: em regime fica no divisor R / Rfuga', () => {
+    const r = montar([fonte(10), { tipo: 'resistor', p: [[0, 0], [100, 0]], props: { R: '1k' } }, { tipo: 'capacitor', p: [[100, 0], [100, 100]], props: { C: '1u', Rfuga: '1k' } }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]);
+    rodar(r.m, 1e-6, 0.02);
+    perto(r.m.v(r.net.pinos.C1[0]), 5, 0.02);
+});
+
+teste('Indutor com DCR: corrente final = V/(R+DCR)', () => {
+    const r = montar([fonte(10), { tipo: 'resistor', p: [[0, 0], [100, 0]], props: { R: '10' } }, { tipo: 'indutor', p: [[100, 0], [100, 100]], props: { L: '1m', DCR: '10' } }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]);
+    rodar(r.m, 1e-6, 0.002);
+    const L1 = r.net.correnteDe.L1.reduce((a, n) => a + r.m.prim(n).i, 0);
+    perto(L1, 0.5, 0.005);
+});
+
+teste('Chave com Ron e Roff ajustáveis', () => {
+    const mk = (lig) => montar([fonte(10), { tipo: 'chave', p: [[0, 0], [100, 0]], props: { ligada: lig, Ron: '1k', Roff: '9k' } }, { tipo: 'resistor', p: [[100, 0], [100, 100]], props: { R: '1k' } }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]);
+    const a = mk(true); a.m.passo(1e-6); perto(a.m.v(a.net.pinos.R1[0]), 5, 0.01, 'fechada');
+    const b = mk(false); b.m.passo(1e-6); perto(b.m.v(b.net.pinos.R1[0]), 1, 0.01, 'aberta');
+});
+
+teste('Voltímetro com resistência de entrada carrega o circuito', () => {
+    const r = montar([fonte(10), { tipo: 'resistor', p: [[0, 0], [100, 0]], props: { R: '10meg' } }, { tipo: 'voltimetro', p: [[100, 100], [100, 0]], props: { Rin: '10meg' } }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]);
+    r.m.passo(1e-6);
+    perto(r.m.v(r.net.pinos.VM1[1]), 5, 0.01);
+});
+
+teste('Diodo com ajuste RS: a queda aumenta com a resistência série', () => {
+    const mk = (aj) => { const r = montar([fonte(5), { tipo: 'resistor', p: [[0, 0], [100, 0]], props: { R: '100' } }, { tipo: 'diodo', p: [[100, 0], [100, 100]], props: { modelo: '1N4148', ajustes: aj } }, { tipo: 'fio', p: [[100, 100], [0, 100]], props: {} }, gnd]); rodar(r.m, 1e-6, 1e-5); return r.m.v(r.net.pinos.R1[1]); };
+    const v0 = mk(''), v1 = mk('RS=20');
+    ok(v1 - v0 > 0.5, `sem RS ${v0}, com RS=20 ${v1}`);
+});
+
+function ampop(props, entrada) {
+    // seguidor de tensão: saída ligada na entrada −
+    const els = comIds([
+        { tipo: 'ampop', pos: [100, 0], rot: 0, props: Object.assign({}, Comp.DEFS.ampop.props, props) },
+        { tipo: 'fonteV', p: [[68, 100], [68, 16]], props: entrada },
+        { tipo: 'fio', p: [[148, 0], [148, -40]], props: {} }, { tipo: 'fio', p: [[148, -40], [68, -40]], props: {} }, { tipo: 'fio', p: [[68, -40], [68, -16]], props: {} },
+        { tipo: 'terra', pos: [68, 100], rot: 0, props: {} }]);
+    const net = Circuito.construir(els, lib());
+    return { m: new Motor(net), out: () => 0, net, sai: (m) => m.v(net.pinos.U1[0]) };
+}
+
+teste('Amp-op: offset aparece na saída do seguidor', () => {
+    const a = ampop({ Vos: '5m' }, { forma: 'dc', V: '1' });
+    rodar(a.m, 1e-6, 1e-5);
+    perto(a.sai(a.m), 1.005, 1e-3);
+});
+
+teste('Amp-op: slew rate limita a subida (1 V/µs)', () => {
+    const a = ampop({ SR: '1meg', GBW: '10meg' }, { forma: 'quadrada', amplitude: '5', freq: '10k', offset: '0', duty: '0.5' });
+    let max = 0, ant = a.sai(a.m);
+    for (let i = 0; i < 2000; i++) { a.m.passo(1e-8); const v = a.sai(a.m); max = Math.max(max, Math.abs(v - ant) / 1e-8); ant = v; }
+    ok(max < 1.1e6 && max > 0.8e6, `inclinação máxima ${max} V/s`);
+});
+
+teste('Amp-op: GBW finito reduz o ganho em malha fechada em alta frequência', () => {
+    // seguidor com GBW 1 MHz: a 1 MHz a saída cai para ~0,707
+    const a = ampop({ GBW: '1meg' }, { forma: 'seno', amplitude: '1', freq: '1meg', offset: '0', fase: '0' });
+    rodar(a.m, 5e-9, 5e-6);
+    let mx = 0; for (let i = 0; i < 400; i++) { a.m.passo(5e-9); mx = Math.max(mx, a.sai(a.m)); }
+    perto(mx, 0.707, 0.06);
+});
+
+teste('Netlist inclui as não idealidades', () => {
+    const els = comIds([fonte(10, { Rint: '50' }), { tipo: 'capacitor', p: [[0, 0], [0, 100]], props: { C: '1u', ESR: '0.1', Rfuga: '1meg' } }, gnd,
+        { tipo: 'diodo', p: [[0, 0], [100, 0]], props: { modelo: '1N4148', ajustes: 'RS=2' } }]);
+    const t = Circuito.exportarSpice(els, lib());
+    ok(/RV1_INT/.test(t) && /RC1_ESR/.test(t) && /RC1_FUGA/.test(t) && /\.model 1N4148_D1 D\(.*RS=2/.test(t), t);
+});
+
 // ---------------------------------------------------------------- exemplos
 function simularExemplo(id, T, chaveFechada) {
     const ex = EXEMPLOS.find((e) => e.id === id);

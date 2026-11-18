@@ -13,6 +13,8 @@
     const C = nodeJS ? require('./componentes.js') : raiz.Componentes;
 
     const chave = ([x, y]) => `${x},${y}`;
+    /** Propriedades que faltam (arquivos antigos) ficam com o padrão do componente, que é sempre o valor ideal. */
+    const completo = (el, d) => Object.assign({}, el, { props: Object.assign({}, d.props, el.props) });
 
     /** Junta pontos em nós. Devolve { noDe(ponto), nNos, pinos: {id: [nós]}, avisos }. */
     function nos(elementos, lib) {
@@ -52,7 +54,7 @@
     function construir(elementos, lib) {
         const r = nos(elementos, lib);
         let nNos = r.nNos;
-        const prims = [], avisos = r.avisos.slice(), primDe = {};
+        const prims = [], avisos = r.avisos.slice(), primDe = {}, correnteDe = {};
         const internos = {};
         const buscarModelo = (nome, locais) => {
             if (!nome) return null;
@@ -62,13 +64,20 @@
             if (!m) avisos.push(`Modelo ${u} não encontrado: usei o padrão`);
             return m || null;
         };
-        elementos.forEach((el) => {
-            const d = C.DEFS[el.tipo];
-            if (!d) { avisos.push(`Componente desconhecido: ${el.tipo}`); return; }
+        elementos.forEach((el0) => {
+            const d = C.DEFS[el0.tipo];
+            if (!d) { avisos.push(`Componente desconhecido: ${el0.tipo}`); return; }
+            const el = completo(el0, d);
             const n = r.pinos[el.id];
             let primeiro = true;
             const ctx = {
-                add(p) { p.nome = p.nome || (el.id + (primeiro ? '' : '.' + prims.length)); if (primeiro) primDe[el.id] = p.nome; primeiro = false; p.dono = el.id; prims.push(p); },
+                add(p, op) {
+                    p.nome = p.nome || (el.id + (primeiro ? '' : '.' + prims.length));
+                    if (primeiro) primDe[el.id] = p.nome;
+                    if (op && op.corrente) (correnteDe[el.id] = correnteDe[el.id] || []).push(p.nome); // somam na corrente do terminal
+                    primeiro = false; p.dono = el.id; prims.push(p);
+                },
+                novoNo: (suf) => { const k = el.id + '#' + suf; if (internos[k] === undefined) internos[k] = nNos++; return internos[k]; },
                 modelo(nome, tipos) {
                     if (!nome) return null;
                     const m = buscarModelo(nome);
@@ -92,15 +101,31 @@
             };
             d.prims(el, n, ctx);
         });
-        // resistência série dos diodos (RS) vira um nó interno
+        // não idealidades dos semicondutores vindas do .model (ou dos ajustes do componente):
+        // resistências série viram nós internos; capacitâncias de junção entram como capacitores lineares (aproximação)
+        const serie = (p, i, R, suf) => {
+            if (!(R > 0) || !isFinite(R)) return;
+            const k = nNos++;
+            prims.push({ tipo: 'R', nome: p.nome + '.' + suf, nos: [p.nos[i], k], valor: R, dono: p.dono });
+            p.nos = p.nos.slice(); p.nos[i] = k;
+        };
+        const cap = (p, a, b, C, suf) => { if (C > 0 && isFinite(C)) prims.push({ tipo: 'C', nome: p.nome + '.' + suf, nos: [a, b], valor: C, dono: p.dono }); };
         prims.slice().forEach((p) => {
-            if (p.tipo === 'D' && p.modelo && p.modelo.params && p.modelo.params.RS > 0) {
-                const k = nNos++;
-                prims.push({ tipo: 'R', nome: p.nome + '.RS', nos: [p.nos[0], k], valor: p.modelo.params.RS, dono: p.dono });
-                p.nos = [k, p.nos[1]];
+            const m = p.modelo && p.modelo.params;
+            if (!m) return;
+            if (p.tipo === 'D') { serie(p, 0, m.RS, 'RS'); cap(p, p.nos[0], p.nos[1], m.CJO, 'CJ'); }
+            if (p.tipo === 'Q') {
+                serie(p, 0, m.RC, 'RC'); serie(p, 1, m.RB, 'RB'); serie(p, 2, m.RE, 'RE');
+                cap(p, p.nos[1], p.nos[2], m.CJE, 'CJE'); cap(p, p.nos[1], p.nos[0], m.CJC, 'CJC');
+            }
+            if (p.tipo === 'M') {
+                serie(p, 0, m.RD, 'RD'); serie(p, 2, m.RS, 'RS');
+                const W = p.W || m.W || 100e-6;
+                cap(p, p.nos[1], p.nos[2], m.CGS ?? (m.CGSO ? m.CGSO * W : 0), 'CGS');
+                cap(p, p.nos[1], p.nos[0], m.CGD ?? (m.CGDO ? m.CGDO * W : 0), 'CGD');
             }
         });
-        return { nNos, prims, pinos: r.pinos, primDe, avisos: [...new Set(avisos)] };
+        return { nNos, prims, pinos: r.pinos, primDe, correnteDe, avisos: [...new Set(avisos)] };
     }
 
     /** Netlist SPICE (.cir) para rodar no ngspice/LTspice. */
@@ -108,20 +133,35 @@
         const r = nos(elementos, lib);
         const usados = new Set(), subUsados = new Set(), padroes = new Map();
         const nomeNo = (k) => (k === 0 ? '0' : 'N' + k);
+        let idAtual = '';
         const ctx = {
-            nomeModelo(nome, padrao) {
-                const m = nome && lib && lib.modelo(nome);
+            modeloDe(nome, padrao) { return (nome && lib && lib.modelo(nome)) || padrao; },
+            /** Nome do modelo para o netlist; com ajustes, cria um modelo derivado (MODELO_ID). tirar = parâmetros que não vão no .model */
+            nomeModelo(nome, padrao, ajustes, el, tirar) {
+                const m = (nome && lib && lib.modelo(nome)) || null;
+                const base = m || padrao;
+                const aj = C.lerAjustes(ajustes);
+                (tirar || []).forEach((k) => delete aj[k]);
+                const limpa = (pr) => { const o = Object.assign({}, pr); (tirar || []).forEach((k) => delete o[k]); return o; };
+                if (Object.keys(aj).length || (tirar && tirar.some((k) => base.params[k] !== undefined))) {
+                    const d = { nome: `${base.nome}_${el.id}`, tipo: base.tipo, params: Object.assign(limpa(base.params), aj) };
+                    padroes.set(d.nome, d);
+                    return d.nome;
+                }
                 if (m) { usados.add(m.nome); return m.nome; }
                 padroes.set(padrao.nome, padrao);
                 return padrao.nome;
             },
+            novoNo: (suf) => `N_${idAtual}_${suf}`,
             usarSubckt(nome) { subUsados.add(String(nome).toUpperCase()); }
         };
         const linhas = [`* ${opcoes.titulo || 'Circuito'} — exportado pelo Simulador de Circuitos (Falstad + SPICE), Marlon Sigales`];
-        elementos.forEach((el) => {
-            const d = C.DEFS[el.tipo];
+        elementos.forEach((el0) => {
+            const d = C.DEFS[el0.tipo];
             if (!d) return;
-            const l = d.spice(el, (r.pinos[el.id] || []).map(nomeNo), ctx);
+            const el = completo(el0, d);
+            idAtual = el.id;
+            const l = d.spice.call(d, el, (r.pinos[el.id] || []).map(nomeNo), ctx);
             if (l) linhas.push(l);
         });
         // subcircuitos usados dentro de subcircuitos
@@ -136,7 +176,7 @@
             });
         }
         linhas.push('');
-        padroes.forEach((m) => linhas.push(`.model ${m.nome} ${m.tipo}(${Object.entries(m.params).map(([k, v]) => `${k}=${v}`).join(' ')})`));
+        padroes.forEach((m) => linhas.push(`.model ${m.nome} ${m.tipo}(${Object.entries(m.params).filter(([, v]) => isFinite(v)).map(([k, v]) => `${k}=${v}`).join(' ')})`));
         usados.forEach((n) => linhas.push(lib.modelo(n).texto));
         subUsados.forEach((n) => { const s = lib && lib.subckt(n); if (s) linhas.push(s.texto); });
         linhas.push('');

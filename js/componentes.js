@@ -22,7 +22,16 @@
         ZENER: { nome: 'ZENER_PADRAO', tipo: 'D', params: { IS: 1e-14, N: 1, BV: 5.6, IBV: 5e-3 } }
     };
 
-    const CORES_LED = { vermelho: '#ff2a2a', verde: '#2bd94a', azul: '#3a7bff', amarelo: '#ffd21a', branco: '#ffffff' };
+    // LED sem modelo da biblioteca: modelo pela cor, com a tensão direta típica a 10 mA (N = 2, RS = 5 Ω)
+    // vermelho 1,8 V · amarelo 2,0 V · verde 2,1 V · azul 3,0 V · branco 3,1 V
+    const LED_COR = {
+        vermelho: { nome: 'LED_VERMELHO_PADRAO', tipo: 'D', params: { IS: 1.98e-17, N: 2, RS: 5 } },
+        amarelo: { nome: 'LED_AMARELO_PADRAO', tipo: 'D', params: { IS: 4.1e-19, N: 2, RS: 5 } },
+        verde: { nome: 'LED_VERDE_PADRAO', tipo: 'D', params: { IS: 6e-20, N: 2, RS: 5 } },
+        azul: { nome: 'LED_AZUL_PADRAO', tipo: 'D', params: { IS: 1.65e-27, N: 2, RS: 5 } },
+        branco: { nome: 'LED_BRANCO_PADRAO', tipo: 'D', params: { IS: 2.4e-28, N: 2, RS: 5 } }
+    };
+    const CORES_LED = { vermelho: '#ff2a2a', verde: '#2bd94a', azul: '#3a7bff', amarelo: '#ffd21a', branco: '#ffe9a0' }; // branco brilha amarelado para aparecer no fundo claro
 
     // ------------------------------------------------------------ geometria
     function girar([dx, dy], rot) {
@@ -114,19 +123,72 @@
     /** Nome SPICE: usa o id se já começar com a letra certa (R1 → R1, LED1 → DLED1). */
     const nm = (letra, el) => (String(el.id).toUpperCase().startsWith(letra) ? el.id : letra + el.id);
 
+
+    // ------------------------------------------------------------ não idealidades
+    // Todos os parâmetros começam no valor ideal (0 em série, ∞ em paralelo) e podem ser ajustados.
+    const RMIN = 1e-4; // menor resistência que o motor usa no lugar do "0" de fios e chaves (evita matriz singular)
+    /** "∞", "inf", "" → Infinity; senão valor SPICE. */
+    function num(v) {
+        const t = String(v ?? '').trim().toLowerCase();
+        if (t === '' || t === '∞' || t === 'inf' || t === 'infinito') return Infinity;
+        return S.valor(v);
+    }
+    const ativo0 = (v) => { const x = num(v); return isFinite(x) && x > 0; };   // série: ativo se > 0
+    const ativoInf = (v) => { const x = num(v); return isFinite(x) && x > 0; }; // paralelo: ativo se finito
+    const NI = (k, r, u, dica) => ({ k, r, u, ni: true, dica });
+
+    /**
+     * Rede de um bipolo: elementos em série entre p0 e p1 (o 1º é o principal) e elementos em paralelo.
+     * Itens: { t: 'R'|'L'|'C', v: número, suf: 'ESR' }. Itens com valor 0 em série ou ∞ em paralelo não entram.
+     * modo 'prims' (motor) ou 'spice' (netlist). Devolve as linhas no modo spice.
+     */
+    function rede(el, n, ctx, serie, paralelo, modo) {
+        const ser = serie.filter((x) => x.fixo || (isFinite(x.v) && x.v > 0));
+        const par = (paralelo || []).filter((x) => isFinite(x.v) && x.v > 0);
+        const linhas = [];
+        let a = n[0];
+        ser.forEach((x, i) => {
+            const b = i === ser.length - 1 ? n[1] : ctx.novoNo(x.suf || String(i));
+            if (modo === 'spice') linhas.push(`${nomeSpice(x.t, el, x.suf, i === 0)} ${a} ${b} ${x.v}`);
+            else ctx.add({ tipo: x.t, nos: [a, b], valor: x.v }, { corrente: i === 0 });
+            a = b;
+        });
+        par.forEach((x) => {
+            if (modo === 'spice') linhas.push(`${nomeSpice(x.t, el, x.suf, false)} ${n[0]} ${n[1]} ${x.v}`);
+            else ctx.add({ tipo: x.t, nos: [n[0], n[1]], valor: x.v }, { corrente: true });
+        });
+        return linhas.join('\n');
+    }
+    function nomeSpice(letra, el, suf, principal) { return principal ? nm(letra, el) : `${letra}${el.id}_${suf}`; }
+
+    /** "RS=0.5 CJO=4p" → { RS: 0.5, CJO: 4e-12 } */
+    function lerAjustes(txt) {
+        const o = {};
+        String(txt || '').split(/[\s,;]+/).forEach((t) => { const i = t.indexOf('='); if (i > 0) { const v = num(t.slice(i + 1)); if (!isNaN(v)) o[t.slice(0, i).toUpperCase()] = v; } });
+        return o;
+    }
+    /** Modelo com os ajustes do componente por cima (não altera a biblioteca). */
+    function comAjustes(m, txt, el) {
+        const aj = lerAjustes(txt);
+        if (!Object.keys(aj).length) return m;
+        return { nome: `${m.nome}_${el.id}`, tipo: m.tipo, params: Object.assign({}, m.params, aj) };
+    }
+    const CAMPO_AJUSTES = (dica) => ({ k: 'ajustes', r: 'Ajustes do modelo (sobrescrevem o .model)', ni: true, texto: true, dica });
+
     function modeloTexto(el, padrao) { return el.props.modelo || padrao; }
 
     // ------------------------------------------------------------ catálogo
     const DEFS = {
         fio: {
-            icone: '╱', nome: 'Fio', grupo: 'ferramentas', bipolo: true, tecla: 'w', props: {},
+            icone: '╱', nome: 'Fio', grupo: 'ferramentas', bipolo: true, tecla: 'w', props: { R: '0' },
+            campos: [NI('R', 'Resistência do fio', 'Ω', '0 = ideal')],
             desenhar(g, el, info) { const [[a, b], [c, d]] = el.p; terminal(g, a, b, c, d, info.cor(info.v[0])); },
-            prims(el, n, ctx) { ctx.add({ tipo: 'R', nos: n, valor: 1e-3 }); },
-            spice(el, n) { return `${nm('R', el)} ${n[0]} ${n[1]} 1m`; }
+            prims(el, n, ctx) { ctx.add({ tipo: 'R', nos: n, valor: Math.max(num(el.props.R) || 0, RMIN) }); },
+            spice(el, n) { return `${nm('R', el)} ${n[0]} ${n[1]} ${Math.max(num(el.props.R) || 0, RMIN)}`; }
         },
         resistor: {
-            icone: 'Ω', nome: 'Resistor', grupo: 'passivos', bipolo: true, tecla: 'r', props: { R: '1k' },
-            campos: [{ k: 'R', r: 'Resistência', u: 'Ω' }],
+            icone: 'Ω', nome: 'Resistor', grupo: 'passivos', bipolo: true, tecla: 'r', props: { R: '1k', ESL: '0', Cp: '0' },
+            campos: [{ k: 'R', r: 'Resistência', u: 'Ω' }, NI('ESL', 'Indutância série (ESL)', 'H', '0 = ideal'), NI('Cp', 'Capacitância em paralelo', 'F', '0 = ideal')],
             texto: (el) => fmt(el.props.R, 'Ω'),
             desenhar(g, el, info) {
                 bipolo(g, el, info, 32, (g, c) => {
@@ -135,12 +197,13 @@
                     g.lineTo(c, 0); g.stroke();
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'R', nos: n, valor: S.valor(el.props.R) }); },
-            spice(el, n) { return `${nm('R', el)} ${n[0]} ${n[1]} ${el.props.R}`; }
+            rede(el) { return [[{ t: 'R', v: S.valor(el.props.R), fixo: true }, { t: 'L', v: num(el.props.ESL), suf: 'ESL' }], [{ t: 'C', v: num(el.props.Cp), suf: 'CP' }]]; },
+            prims(el, n, ctx) { const [a, b] = this.rede(el); rede(el, n, ctx, a, b, 'prims'); },
+            spice(el, n, ctx) { const [a, b] = this.rede(el); return rede(el, n, ctx, a, b, 'spice'); }
         },
         capacitor: {
-            icone: 'C', nome: 'Capacitor', grupo: 'passivos', bipolo: true, tecla: 'c', props: { C: '10u' },
-            campos: [{ k: 'C', r: 'Capacitância', u: 'F' }],
+            icone: 'C', nome: 'Capacitor', grupo: 'passivos', bipolo: true, tecla: 'c', props: { C: '10u', ESR: '0', ESL: '0', Rfuga: '∞' },
+            campos: [{ k: 'C', r: 'Capacitância', u: 'F' }, NI('ESR', 'Resistência série (ESR)', 'Ω', '0 = ideal'), NI('ESL', 'Indutância série (ESL)', 'H', '0 = ideal'), NI('Rfuga', 'Resistência de fuga (paralelo)', 'Ω', '∞ = ideal')],
             texto: (el) => fmt(el.props.C, 'F'),
             desenhar(g, el, info) {
                 bipolo(g, el, info, 24, (g, c) => {
@@ -148,12 +211,13 @@
                     g.lineWidth = 3; linha(g, c / 2 - 4, -11, c / 2 - 4, 11); linha(g, c / 2 + 4, -11, c / 2 + 4, 11);
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'C', nos: n, valor: S.valor(el.props.C) }); },
-            spice(el, n) { return `${nm('C', el)} ${n[0]} ${n[1]} ${el.props.C}`; }
+            rede(el) { return [[{ t: 'C', v: S.valor(el.props.C), fixo: true }, { t: 'R', v: num(el.props.ESR), suf: 'ESR' }, { t: 'L', v: num(el.props.ESL), suf: 'ESL' }], [{ t: 'R', v: num(el.props.Rfuga), suf: 'FUGA' }]]; },
+            prims(el, n, ctx) { const [a, b] = this.rede(el); rede(el, n, ctx, a, b, 'prims'); },
+            spice(el, n, ctx) { const [a, b] = this.rede(el); return rede(el, n, ctx, a, b, 'spice'); }
         },
         indutor: {
-            icone: 'L', nome: 'Indutor', grupo: 'passivos', bipolo: true, tecla: 'L', props: { L: '10m' },
-            campos: [{ k: 'L', r: 'Indutância', u: 'H' }],
+            icone: 'L', nome: 'Indutor', grupo: 'passivos', bipolo: true, tecla: 'L', props: { L: '10m', DCR: '0', Cp: '0', Rp: '∞' },
+            campos: [{ k: 'L', r: 'Indutância', u: 'H' }, NI('DCR', 'Resistência do enrolamento (DCR)', 'Ω', '0 = ideal'), NI('Cp', 'Capacitância entre espiras (paralelo)', 'F', '0 = ideal'), NI('Rp', 'Perdas no núcleo (R em paralelo)', 'Ω', '∞ = ideal')],
             texto: (el) => fmt(el.props.L, 'H'),
             desenhar(g, el, info) {
                 bipolo(g, el, info, 40, (g, c) => {
@@ -162,12 +226,13 @@
                     g.stroke();
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'L', nos: n, valor: S.valor(el.props.L) }); },
-            spice(el, n) { return `${nm('L', el)} ${n[0]} ${n[1]} ${el.props.L}`; }
+            rede(el) { return [[{ t: 'L', v: S.valor(el.props.L), fixo: true }, { t: 'R', v: num(el.props.DCR), suf: 'DCR' }], [{ t: 'C', v: num(el.props.Cp), suf: 'CP' }, { t: 'R', v: num(el.props.Rp), suf: 'RP' }]]; },
+            prims(el, n, ctx) { const [a, b] = this.rede(el); rede(el, n, ctx, a, b, 'prims'); },
+            spice(el, n, ctx) { const [a, b] = this.rede(el); return rede(el, n, ctx, a, b, 'spice'); }
         },
         chave: {
-            icone: 'S', nome: 'Chave (clique para abrir/fechar)', curto: 'Chave', grupo: 'passivos', bipolo: true, tecla: 's', props: { ligada: false },
-            campos: [{ k: 'ligada', r: 'Fechada', tipo: 'bool' }],
+            icone: 'S', nome: 'Chave (clique para abrir/fechar)', curto: 'Chave', grupo: 'passivos', bipolo: true, tecla: 's', props: { ligada: false, Ron: '0', Roff: '∞' },
+            campos: [{ k: 'ligada', r: 'Fechada', tipo: 'bool' }, NI('Ron', 'Resistência fechada (Ron)', 'Ω', '0 = ideal'), NI('Roff', 'Resistência aberta (Roff)', 'Ω', '∞ = ideal')],
             texto: (el) => el.props.ligada ? 'fechada' : 'aberta',
             clicavel: true,
             clicar(el) { el.props.ligada = !el.props.ligada; },
@@ -178,13 +243,16 @@
                     if (el.props.ligada) linha(g, 0, 0, c, 0); else linha(g, 0, 0, c - 3, -14);
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'SW', nos: n, ligada: !!el.props.ligada }); },
-            spice(el, n) { return `${nm('R', el)} ${n[0]} ${n[1]} ${el.props.ligada ? '10m' : '1G'}`; }
+            prims(el, n, ctx) { ctx.add({ tipo: 'SW', nos: n, ligada: !!el.props.ligada, ron: Math.max(num(el.props.Ron) || 0, RMIN), roff: num(el.props.Roff) }); },
+            spice(el, n) {
+                const r = el.props.ligada ? Math.max(num(el.props.Ron) || 0, RMIN) : num(el.props.Roff);
+                return isFinite(r) ? `${nm('R', el)} ${n[0]} ${n[1]} ${r}` : `* ${el.id}: chave aberta ideal`;
+            }
         },
         fonteV: {
-            icone: 'V', nome: 'Fonte de tensão', grupo: 'fontes', bipolo: true, tecla: 'v',
+            icone: 'V', nome: 'Fonte de tensão', grupo: 'fontes', bipolo: true, tecla: 'v', tensaoInvertida: true,
             props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5' },
-            campos: CAMPOS_FONTE,
+            campos: CAMPOS_FONTE.concat([NI('Rint', 'Resistência interna (série)', 'Ω', '0 = ideal')]),
             texto: (el) => textoFonte(el.props),
             desenhar(g, el, info) {
                 // p[0] = negativo, p[1] = positivo (como no Falstad: desenha do − para o +)
@@ -202,13 +270,20 @@
                     }
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'V', nos: [n[1], n[0]], fonte: fonteDasProps(el.props) }); },
-            spice(el, n) { return `${nm('V', el)} ${n[1]} ${n[0]} ${spiceFonte(el.props)}`; }
+            prims(el, n, ctx) {
+                const r = num(el.props.Rint), k = r > 0 && isFinite(r) ? ctx.novoNo('INT') : n[1];
+                ctx.add({ tipo: 'V', nos: [k, n[0]], fonte: fonteDasProps(el.props) }, { corrente: true });
+                if (k !== n[1]) ctx.add({ tipo: 'R', nos: [k, n[1]], valor: r });
+            },
+            spice(el, n, ctx) {
+                const r = num(el.props.Rint), k = r > 0 && isFinite(r) ? ctx.novoNo('INT') : n[1];
+                return `${nm('V', el)} ${k} ${n[0]} ${spiceFonte(el.props)}` + (k !== n[1] ? `\nR${el.id}_INT ${k} ${n[1]} ${r}` : '');
+            }
         },
         trilho: {
             icone: '+', nome: 'Trilho de tensão (+V)', curto: 'Trilho +V', grupo: 'fontes', bipolo: false, tecla: 'V',
             props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5' },
-            campos: CAMPOS_FONTE,
+            campos: CAMPOS_FONTE.concat([NI('Rint', 'Resistência interna (série)', 'Ω', '0 = ideal')]),
             pinos: (el) => pinosPorOffsets(el, [[0, 0]]),
             caixa: (el) => caixaGirada(el, -24, -36, 48, 36),
             desenhar(g, el, info) {
@@ -220,12 +295,19 @@
                     g.fillText(textoFonte(el.props), 0, 0);
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'V', nos: [n[0], 0], fonte: fonteDasProps(el.props) }); },
-            spice(el, n) { return `${nm('V', el)} ${n[0]} 0 ${spiceFonte(el.props)}`; }
+            prims(el, n, ctx) {
+                const r = num(el.props.Rint), k = r > 0 && isFinite(r) ? ctx.novoNo('INT') : n[0];
+                ctx.add({ tipo: 'V', nos: [k, 0], fonte: fonteDasProps(el.props) });
+                if (k !== n[0]) ctx.add({ tipo: 'R', nos: [k, n[0]], valor: r });
+            },
+            spice(el, n, ctx) {
+                const r = num(el.props.Rint), k = r > 0 && isFinite(r) ? ctx.novoNo('INT') : n[0];
+                return `${nm('V', el)} ${k} 0 ${spiceFonte(el.props)}` + (k !== n[0] ? `\nR${el.id}_INT ${k} ${n[0]} ${r}` : '');
+            }
         },
         fonteI: {
-            icone: 'I', nome: 'Fonte de corrente', grupo: 'fontes', bipolo: true, props: { I: '1m' },
-            campos: [{ k: 'I', r: 'Corrente', u: 'A' }],
+            icone: 'I', nome: 'Fonte de corrente', grupo: 'fontes', bipolo: true, props: { I: '1m', Rp: '∞' },
+            campos: [{ k: 'I', r: 'Corrente', u: 'A' }, NI('Rp', 'Resistência interna (paralelo)', 'Ω', '∞ = ideal')],
             texto: (el) => fmt(el.props.I, 'A'),
             desenhar(g, el, info) {
                 bipolo(g, el, info, 32, (g, c) => {
@@ -235,8 +317,11 @@
                     linha(g, c / 2 - 8, 0, c / 2 + 5, 0); triangulo(g, c / 2 + 3, c / 2 + 9, 4, true);
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'I', nos: n, fonte: { forma: 'dc', dc: S.valor(el.props.I) } }); },
-            spice(el, n) { return `${nm('I', el)} ${n[0]} ${n[1]} DC ${el.props.I}`; }
+            prims(el, n, ctx) {
+                ctx.add({ tipo: 'I', nos: n, fonte: { forma: 'dc', dc: S.valor(el.props.I) } }, { corrente: true });
+                if (ativoInf(el.props.Rp)) ctx.add({ tipo: 'R', nos: n, valor: num(el.props.Rp) }, { corrente: true });
+            },
+            spice(el, n) { return `${nm('I', el)} ${n[0]} ${n[1]} DC ${el.props.I}` + (ativoInf(el.props.Rp) ? `\nR${el.id}_P ${n[0]} ${n[1]} ${num(el.props.Rp)}` : ''); }
         },
         terra: {
             icone: '⏚', nome: 'Terra', grupo: 'fontes', bipolo: false, tecla: 'g', props: {},
@@ -253,36 +338,37 @@
             spice() { return ''; }
         },
         diodo: {
-            icone: '▷', nome: 'Diodo', grupo: 'semicondutores', bipolo: true, tecla: 'd', props: { modelo: '' },
-            campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: ['D'] }],
+            icone: '▷', nome: 'Diodo', grupo: 'semicondutores', bipolo: true, tecla: 'd', props: { modelo: '', ajustes: '' },
+            campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: ['D'] }, CAMPO_AJUSTES('ex.: RS=0.5 CJO=4p N=1.8 BV=100 (vazio = como no modelo)')],
             texto: (el) => modeloTexto(el, ''),
             desenhar(g, el, info) { bipolo(g, el, info, 32, (g, c) => desenhaDiodo(g, c, info)); },
-            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.D }); },
-            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.D)}`; }
+            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: comAjustes(ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.D, el.props.ajustes, el) }); },
+            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.D, el.props.ajustes, el)}`; }
         },
         zener: {
-            icone: 'Z', nome: 'Diodo zener', curto: 'Zener', grupo: 'semicondutores', bipolo: true, tecla: 'z', props: { modelo: '' },
-            campos: [{ k: 'modelo', r: 'Modelo SPICE (com BV)', tipo: 'modelo', tipos: ['D'] }],
+            icone: 'Z', nome: 'Diodo zener', curto: 'Zener', grupo: 'semicondutores', bipolo: true, tecla: 'z', props: { modelo: '', ajustes: '' },
+            campos: [{ k: 'modelo', r: 'Modelo SPICE (com BV)', tipo: 'modelo', tipos: ['D'] }, CAMPO_AJUSTES('ex.: RS=0.5 CJO=4p N=1.8 BV=100 (vazio = como no modelo)')],
             texto: (el) => el.props.modelo || 'zener 5,6 V',
             desenhar(g, el, info) {
                 bipolo(g, el, info, 32, (g, c) => desenhaDiodo(g, c, info, (g, x0, x1) => {
                     g.lineWidth = 3; linha(g, x1, -9, x1 - 5, -13); linha(g, x1, 9, x1 + 5, 13);
                 }));
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.ZENER }); },
-            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.ZENER)}`; }
+            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: comAjustes(ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.ZENER, el.props.ajustes, el) }); },
+            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.ZENER, el.props.ajustes, el)}`; }
         },
         led: {
-            icone: '✦', nome: 'LED', grupo: 'semicondutores', bipolo: true, tecla: 'l', props: { modelo: '', cor: 'vermelho' },
+            icone: '✦', nome: 'LED', grupo: 'semicondutores', bipolo: true, tecla: 'l', props: { modelo: '', cor: 'vermelho', ajustes: '' },
             campos: [
-                { k: 'cor', r: 'Cor', tipo: 'sel', op: Object.keys(CORES_LED).map((c) => [c, c]) },
-                { k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: ['D'] }
+                { k: 'cor', r: 'Cor (sem modelo, define a tensão direta típica)', tipo: 'sel', op: [['vermelho', 'vermelho (≈1,8 V)'], ['amarelo', 'amarelo (≈2,0 V)'], ['verde', 'verde (≈2,1 V)'], ['azul', 'azul (≈3,0 V)'], ['branco', 'branco (≈3,1 V)']] },
+                { k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: ['D'] },
+                CAMPO_AJUSTES('ex.: RS=0.5 CJO=4p N=1.8 BV=100 (vazio = como no modelo)')
             ],
             texto: (el) => modeloTexto(el, ''),
             desenhar(g, el, info) {
                 const i = Math.max(0, info.i || 0);
                 bipolo(g, el, info, 32, (g, c) => {
-                    const brilho = Math.min(1, i / 0.01);
+                    const brilho = Math.min(1, Math.sqrt(i / 0.01)); // 1 mA já aparece; 10 mA = brilho total
                     if (brilho > 0.02) {
                         g.save(); g.globalAlpha = 0.25 + 0.6 * brilho; g.fillStyle = CORES_LED[el.props.cor] || '#f22';
                         g.beginPath(); g.arc(c / 2, 0, 12 + 6 * brilho, 0, 7); g.fill(); g.restore();
@@ -293,16 +379,19 @@
                     });
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.LED }); },
-            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.LED)}`; }
+            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: comAjustes(ctx.modelo(el.props.modelo, ['D']) || LED_COR[el.props.cor] || LED_COR.vermelho, el.props.ajustes, el) }); },
+            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, LED_COR[el.props.cor] || LED_COR.vermelho, el.props.ajustes, el)}`; }
         },
         npn: transistorBJT('npn', 'Transistor NPN', 'NPN', 'n'),
         pnp: transistorBJT('pnp', 'Transistor PNP', 'PNP', 'p'),
         nmos: transistorMOS('nmos', 'MOSFET canal N', 'NMOS'),
         pmos: transistorMOS('pmos', 'MOSFET canal P', 'PMOS'),
         ampop: {
-            icone: '△', nome: 'Amp-op ideal (− em cima)', curto: 'Amp-op ideal', grupo: 'integrados', bipolo: false, tecla: 'a', props: { ganho: '100k', vmax: '15', vmin: '-15' },
-            campos: [{ k: 'ganho', r: 'Ganho em malha aberta' }, { k: 'vmax', r: 'Saturação positiva', u: 'V' }, { k: 'vmin', r: 'Saturação negativa', u: 'V' }],
+            icone: '△', nome: 'Amp-op ideal (− em cima)', curto: 'Amp-op ideal', grupo: 'integrados', bipolo: false, tecla: 'a', props: { ganho: '100k', vmax: '15', vmin: '-15', Rin: '∞', Rout: '0', GBW: '∞', SR: '∞', Vos: '0', Ib: '0' },
+            campos: [{ k: 'ganho', r: 'Ganho em malha aberta' }, { k: 'vmax', r: 'Saturação positiva', u: 'V' }, { k: 'vmin', r: 'Saturação negativa', u: 'V' },
+                NI('Rin', 'Resistência de entrada (diferencial)', 'Ω', '∞ = ideal'), NI('Rout', 'Resistência de saída', 'Ω', '0 = ideal'),
+                NI('GBW', 'Produto ganho × banda (GBW)', 'Hz', '∞ = ideal'), NI('SR', 'Taxa de subida (slew rate)', 'V/s', '∞ = ideal; ex.: 0.5meg = 0,5 V/µs'),
+                NI('Vos', 'Tensão de offset', 'V', '0 = ideal'), NI('Ib', 'Corrente de polarização das entradas', 'A', '0 = ideal')],
             // pinos: saída, entrada +, entrada −
             pinos: (el) => pinosPorOffsets(el, [[48, 0], [-32, 16], [-32, -16]]),
             nomesPinos: ['saída', 'entrada +', 'entrada −'],
@@ -317,8 +406,52 @@
                     g.lineWidth = 1.6; linha(g, -12, -16, -6, -16); linha(g, -12, 16, -6, 16); linha(g, -9, 13, -9, 19);
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'OP', nos: n, ganho: S.valor(el.props.ganho), vmax: S.valor(el.props.vmax), vmin: S.valor(el.props.vmin) }); },
-            spice(el, n) { return `${nm('E', el)} ${n[0]} 0 ${n[1]} ${n[2]} ${el.props.ganho}  ; amp-op ideal (sem saturação no SPICE)`; }
+            /**
+             * Amp-op: estágio com ganho e saturação (OP) → [polo do GBW com limite de corrente = slew rate] → buffer → Rout.
+             * Só cria o que não for ideal.
+             */
+            prims(el, n, ctx) {
+                const [out, ip, im] = n, p = el.props;
+                const A = S.valor(p.ganho), gbw = num(p.GBW), sr = num(p.SR), rout = num(p.Rout), rin = num(p.Rin), ib = num(p.Ib), vos = num(p.Vos) || 0;
+                const temPolo = isFinite(gbw) || isFinite(sr);
+                const usaRout = isFinite(rout) && rout > 0;
+                const k1 = temPolo || usaRout ? ctx.novoNo('A') : out;
+                // com polo, a saturação fica no estágio de saída (o nó interno do polo não satura, como num amp-op real)
+                const vmax = S.valor(p.vmax), vmin = S.valor(p.vmin);
+                ctx.add({ tipo: 'OP', nos: [k1, ip, im], ganho: A, vmax: temPolo ? 1e30 : vmax, vmin: temPolo ? -1e30 : vmin, vos });
+                let k = k1;
+                if (temPolo) {
+                    const fp = (isFinite(gbw) ? gbw : 1e12) / A;   // só slew rate: polo bem alto
+                    const R = 1000, C = 1 / (2 * Math.PI * fp * R);
+                    const k2 = ctx.novoNo('P');
+                    if (isFinite(sr)) ctx.add({ tipo: 'RLIM', nos: [k1, k2], valor: R, imax: sr * C }); else ctx.add({ tipo: 'R', nos: [k1, k2], valor: R });
+                    ctx.add({ tipo: 'C', nos: [k2, 0], valor: C });
+                    const k3 = usaRout ? ctx.novoNo('B') : out;
+                    ctx.add({ tipo: 'OP', nos: [k3, k2, 0], ganho: 1, vmax, vmin }); // buffer de saída com os trilhos
+                    k = k3;
+                }
+                if (usaRout) ctx.add({ tipo: 'R', nos: [k, out], valor: rout });
+                if (isFinite(rin) && rin > 0) ctx.add({ tipo: 'R', nos: [ip, im], valor: rin });
+                if (ib) { ctx.add({ tipo: 'I', nos: [ip, 0], fonte: { forma: 'dc', dc: ib } }); ctx.add({ tipo: 'I', nos: [im, 0], fonte: { forma: 'dc', dc: ib } }); }
+            },
+            spice(el, n, ctx) {
+                const [out, ip, im] = n, p = el.props, id = el.id;
+                const A = S.valor(p.ganho), gbw = num(p.GBW), rout = num(p.Rout), rin = num(p.Rin), ib = num(p.Ib), vos = num(p.Vos) || 0;
+                const L = [`* ${id}: amp-op (a saturação em ${p.vmin} V e ${p.vmax} V e o slew rate não vão para o netlist linear)`];
+                const ipx = vos ? ctx.novoNo('VOS') : ip;
+                if (vos) L.push(`V${id}_OS ${ipx} ${ip} ${vos}`);
+                const usaRout = isFinite(rout) && rout > 0;
+                if (isFinite(gbw)) {
+                    const a = ctx.novoNo('A'), pp = ctx.novoNo('P'), b = usaRout ? ctx.novoNo('B') : out;
+                    const R = 1000, C = 1 / (2 * Math.PI * (gbw / A) * R);
+                    L.push(`E${id} ${a} 0 ${ipx} ${im} ${A}`, `R${id}_P ${a} ${pp} ${R}`, `C${id}_P ${pp} 0 ${C}`, `E${id}_B ${b} 0 ${pp} 0 1`);
+                    if (usaRout) L.push(`R${id}_OUT ${b} ${out} ${rout}`);
+                } else if (usaRout) { const a = ctx.novoNo('A'); L.push(`E${id} ${a} 0 ${ipx} ${im} ${A}`, `R${id}_OUT ${a} ${out} ${rout}`); }
+                else L.push(`E${id} ${out} 0 ${ipx} ${im} ${A}`);
+                if (isFinite(rin) && rin > 0) L.push(`R${id}_IN ${ip} ${im} ${rin}`);
+                if (ib) L.push(`I${id}_BP ${ip} 0 ${ib}`, `I${id}_BN ${im} 0 ${ib}`);
+                return L.join('\n');
+            }
         },
         caixa: {
             icone: '▭', nome: 'Caixa SPICE (subcircuito)', curto: 'Caixa SPICE', grupo: 'integrados', bipolo: false, tecla: 'x',
@@ -387,7 +520,8 @@
             spice(el, n, ctx) { if (!el.props.modelo) return `* ${el.id}: caixa sem modelo`; ctx.usarSubckt(el.props.modelo); return `${nm('X', el)} ${n.join(' ')} ${el.props.modelo}`; }
         },
         voltimetro: {
-            icone: '⎍', nome: 'Voltímetro', grupo: 'instrumentos', bipolo: true, tecla: 'm', props: {},
+            icone: '⎍', nome: 'Voltímetro', grupo: 'instrumentos', bipolo: true, tecla: 'm', tensaoInvertida: true, props: { Rin: '∞' },
+            campos: [NI('Rin', 'Resistência de entrada', 'Ω', '∞ = ideal; multímetro comum: 10meg')],
             texto: () => '',
             desenhar(g, el, info) {
                 bipolo(g, el, info, 32, (g, c) => {
@@ -399,8 +533,8 @@
                 g.fillText('V', (x1 + x2) / 2, (y1 + y2) / 2 + 1); g.restore();
                 rotulo(g, el, S.formatar(info.v[1] - info.v[0], 'V'));
             },
-            prims() {},
-            spice() { return ''; }
+            prims(el, n, ctx) { if (ativoInf(el.props.Rin)) ctx.add({ tipo: 'R', nos: n, valor: num(el.props.Rin) }, { corrente: true }); },
+            spice(el, n) { return ativoInf(el.props.Rin) ? `R${el.id}_IN ${n[0]} ${n[1]} ${num(el.props.Rin)}` : ''; }
         }
     };
 
@@ -454,8 +588,8 @@
     function transistorBJT(id, nome, tipo, tecla) {
         const pnp = tipo === 'PNP';
         return {
-            nome, icone: pnp ? 'P' : 'N', grupo: 'semicondutores', bipolo: false, tecla, props: { modelo: '' },
-            campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: [tipo] }],
+            nome, icone: pnp ? 'P' : 'N', grupo: 'semicondutores', bipolo: false, tecla, props: { modelo: '', ajustes: '' },
+            campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: [tipo] }, CAMPO_AJUSTES('ex.: BF=150 VAF=50 RB=10 RC=1 RE=0.5 CJE=20p CJC=8p (vazio = como no modelo)')],
             // pinos: coletor, base, emissor
             pinos: (el) => pinosPorOffsets(el, [[16, -32], [-32, 0], [16, 32]]),
             nomesPinos: ['coletor', 'base', 'emissor'],
@@ -476,8 +610,8 @@
                     if (el.props.modelo) { g.save(); g.rotate(-(el.rot || 0) * Math.PI / 2); g.fillText(el.props.modelo, 22, 0); g.restore(); }
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'Q', nos: n, modelo: ctx.modelo(el.props.modelo, [tipo]) || MODELOS_PADRAO[tipo] }); },
-            spice(el, n, ctx) { return `${nm('Q', el)} ${n[0]} ${n[1]} ${n[2]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO[tipo])}`; },
+            prims(el, n, ctx) { ctx.add({ tipo: 'Q', nos: n, modelo: comAjustes(ctx.modelo(el.props.modelo, [tipo]) || MODELOS_PADRAO[tipo], el.props.ajustes, el) }); },
+            spice(el, n, ctx) { return `${nm('Q', el)} ${n[0]} ${n[1]} ${n[2]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO[tipo], el.props.ajustes, el)}`; },
             correntesPinos: (p) => p ? [p.ic, p.ib, p.ie] : null
         };
     }
@@ -485,8 +619,8 @@
     function transistorMOS(id, nome, tipo) {
         const pmos = tipo === 'PMOS';
         return {
-            nome, icone: pmos ? 'Mp' : 'Mn', grupo: 'semicondutores', bipolo: false, tecla: pmos ? 'P' : 'N', props: { modelo: '' },
-            campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: [tipo] }],
+            nome, icone: pmos ? 'Mp' : 'Mn', grupo: 'semicondutores', bipolo: false, tecla: pmos ? 'P' : 'N', props: { modelo: '', ajustes: '' },
+            campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: [tipo] }, CAMPO_AJUSTES('ex.: VTO=2 KP=0.1 LAMBDA=0.02 RD=0.1 RS=0.05 CGS=1n CGD=200p (vazio = como no modelo)')],
             // pinos: dreno, porta, fonte (corpo ligado à fonte)
             pinos: (el) => pinosPorOffsets(el, [[16, -32], [-32, 0], [16, 32]]),
             nomesPinos: ['dreno', 'porta', 'fonte'],
@@ -504,8 +638,16 @@
                     if (el.props.modelo) { g.save(); g.rotate(-(el.rot || 0) * Math.PI / 2); g.font = '10px Segoe UI, Roboto, Arial'; g.textBaseline = 'middle'; g.fillText(el.props.modelo, 22, 0); g.restore(); }
                 });
             },
-            prims(el, n, ctx) { ctx.add({ tipo: 'M', nos: n, modelo: ctx.modelo(el.props.modelo, [tipo]) || MODELOS_PADRAO[tipo] }); },
-            spice(el, n, ctx) { return `${nm('M', el)} ${n[0]} ${n[1]} ${n[2]} ${n[2]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO[tipo])}`; },
+            prims(el, n, ctx) { ctx.add({ tipo: 'M', nos: n, modelo: comAjustes(ctx.modelo(el.props.modelo, [tipo]) || MODELOS_PADRAO[tipo], el.props.ajustes, el) }); },
+            spice(el, n, ctx) {
+                // CGS/CGD diretos (não existem no MOS1 do SPICE) saem como capacitores à parte
+                const aj = lerAjustes(el.props.ajustes), m = ctx.modeloDe(el.props.modelo, MODELOS_PADRAO[tipo]);
+                const cgs = aj.CGS ?? (m && m.params.CGS), cgd = aj.CGD ?? (m && m.params.CGD);
+                let l = `${nm('M', el)} ${n[0]} ${n[1]} ${n[2]} ${n[2]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO[tipo], el.props.ajustes, el, ['CGS', 'CGD'])}`;
+                if (cgs > 0) l += `\nC${el.id}_GS ${n[1]} ${n[2]} ${cgs}`;
+                if (cgd > 0) l += `\nC${el.id}_GD ${n[1]} ${n[0]} ${cgd}`;
+                return l;
+            },
             correntesPinos: (p) => p ? [p.idr, 0, -p.idr] : null
         };
     }
@@ -525,7 +667,7 @@
         return d.bipolo ? el.p : d.pinos.call(d, el, lib);
     }
 
-    const API = { DEFS, GRUPOS, GRADE, MODELOS_PADRAO, CORES_LED, pinos, girar, rotulo, caixaGirada };
+    const API = { DEFS, GRUPOS, GRADE, MODELOS_PADRAO, CORES_LED, LED_COR, RMIN, pinos, girar, rotulo, caixaGirada, num, lerAjustes, comAjustes };
     if (typeof module !== 'undefined' && module.exports) module.exports = API;
     else raiz.Componentes = API;
 })(typeof window !== 'undefined' ? window : globalThis);

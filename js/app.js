@@ -28,7 +28,7 @@
         fatorCorrente: 4000,
         mostrarCorrente: true,
         escalaV: 5,
-        osc: [], oscN: 5, oscCont: 0,
+        osc: [], oscN: 5, oscCont: 0, _ppa: 5, oscTdiv: 'auto', oscTrig: 'livre', oscNivel: '', oscCongelado: false,
         desfazer: [], refazer: [],
         avisos: [], erro: '',
         tReal: 0, tSimJanela: 0, razao: 0,
@@ -128,7 +128,7 @@
         },
         reiniciar() {
             this.motor = null;
-            this.osc.forEach((o) => { o.dados = []; });
+            this.limparOsc();
             this.reconstruir();
         },
 
@@ -141,8 +141,18 @@
             let i = 0;
             const nome = this.net.primDe[el.id];
             const p = nome && this.motor.prim(nome);
-            if (p) i = p.i;
+            const soma = this.net.correnteDe && this.net.correnteDe[el.id];
+            if (soma) soma.forEach((nm) => { const q = this.motor.prim(nm); if (q) i += q.i; }); // série + paralelos = corrente no terminal
+            else if (p) i = p.i;
             return { v, i, cor: vazio.cor, prim: p };
+        },
+        /**
+         * Tensão de um bipolo como no Falstad: v(p0) − v(p1), de modo que V·I > 0 = potência consumida.
+         * Fontes e voltímetro: v(p1) − v(p0) (o + fica em p1), e V·I > 0 = potência fornecida.
+         */
+        tensaoEl(el, inf) {
+            const v = inf.v[0] - inf.v[1];
+            return C.DEFS[el.tipo].tensaoInvertida ? -v : v;
         },
         cor(v) {
             const f = Math.max(-1, Math.min(1, v / (this.escalaV || 5)));
@@ -186,60 +196,148 @@
         },
 
         // ------------------------------------------------------------ osciloscópio
-        adicionarOsc(el, g) {
+        // Grade de 10 × 8 divisões. Cada traço tem grandeza (V, I, P), escala por divisão (auto ou fixa) e posição.
+        // Todos os traços guardam as amostras juntos (mesmo índice = mesmo instante), alinhados pela direita.
+        adicionarOsc(el, g, conf) {
             if (this.osc.some((o) => o.el === el.id && o.g === g)) return;
             if (this.osc.length >= 4) this.osc.shift();
             const usadas = this.osc.map((o) => o.cor);
-            this.osc.push({ el: el.id, g, cor: CORES_OSC.find((c) => !usadas.includes(c)) || CORES_OSC[0], dados: [] });
+            const len = this.osc.length ? this.osc[0].dados.length : 0;
+            this.osc.push(Object.assign({ el: el.id, g, cor: CORES_OSC.find((c) => !usadas.includes(c)) || CORES_OSC[0], escala: 'auto', pos: 0 }, conf || {}, { dados: new Array(len).fill(NaN) }));
             this.listarOsc();
         },
         valorOsc(o) {
             const el = this.ed.el(o.el);
             if (!el) return NaN;
             const inf = this.info(el);
+            const v = C.DEFS[el.tipo].bipolo ? this.tensaoEl(el, inf) : inf.v[0];
             if (o.g === 'I') return inf.i;
-            return inf.v.length >= 2 ? inf.v[1] - inf.v[0] : inf.v[0];
+            if (o.g === 'P') return Math.abs(v * inf.i);
+            return v;
+        },
+        /** Passos por amostra: com tempo/div fixo, sai da largura da tela (1 amostra por pixel). */
+        passosPorAmostra() {
+            if (this.oscTdiv === 'auto' || !this.oscTdiv) return this.oscN || 5;
+            const w = Math.max(100, Math.floor(($('#osc').parentElement.clientWidth) || 600));
+            return Math.max(1, Math.floor(parseFloat(this.oscTdiv) * 10 / (w * this.dt)));
+        },
+        /** Amostras na tela: com tempo/div fixo, as que cabem em exatamente 10 divisões. */
+        amostrasNaTela(w) {
+            if (this.oscTdiv === 'auto' || !this.oscTdiv) return Math.max(2, Math.floor(w));
+            return Math.max(2, Math.round(parseFloat(this.oscTdiv) * 10 / (this._ppa * this.dt)));
         },
         amostrarOsc() {
-            if (!this.osc.length) return;
-            if (++this.oscCont < this.oscN) return;
+            if (!this.osc.length || this.oscCongelado) return;
+            if (++this.oscCont < this._ppa) return;
             this.oscCont = 0;
-            this.osc.forEach((o) => { o.dados.push(this.valorOsc(o)); if (o.dados.length > 3000) o.dados.splice(0, o.dados.length - 3000); });
+            this.osc.forEach((o) => { o.dados.push(this.valorOsc(o)); if (o.dados.length > 20000) o.dados.splice(0, o.dados.length - 20000); });
         },
+        limparOsc() { this.osc.forEach((o) => { o.dados = []; }); this.oscCont = 0; },
+        unidade: (g) => (g === 'I' ? 'A' : g === 'P' ? 'W' : 'V'),
         listarOsc() {
-            $('#osc-traços').innerHTML = this.osc.length ? this.osc.map((o, i) => `<span class="osc-chip" style="--c:${o.cor}">
-                ${o.g === 'V' ? 'Tensão' : 'Corrente'} em ${esc(o.el)} <button type="button" data-tirar-osc="${i}" title="Tirar do osciloscópio">✕</button></span>`).join('')
-                : '<span class="muted">Selecione um componente e clique em “No osciloscópio”.</span>';
+            const box = $('#osc-traços');
+            if (!this.osc.length) { box.innerHTML = '<p class="muted">Selecione um componente e clique em “No osciloscópio” (V, I ou P).</p>'; return; }
+            const escalas = (u) => ['auto', ...[1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]]
+                .map((v) => `<option value="${v}">${v === 'auto' ? 'automática' : S.formatar(v, u) + '/div'}</option>`).join('');
+            box.innerHTML = `<table class="osc-tabela"><thead><tr><th></th><th>Componente</th><th>Grandeza</th><th>Escala</th><th>Posição (div)</th><th>Medidas na tela</th><th></th></tr></thead><tbody>
+                ${this.osc.map((o, i) => `<tr data-traco="${i}">
+                    <td><span class="osc-cor" style="background:${o.cor}"></span></td>
+                    <td><b>${esc(o.el)}</b></td>
+                    <td><select data-osc="g"><option value="V" ${o.g === 'V' ? 'selected' : ''}>Tensão</option><option value="I" ${o.g === 'I' ? 'selected' : ''}>Corrente</option><option value="P" ${o.g === 'P' ? 'selected' : ''}>Potência</option></select></td>
+                    <td><select data-osc="escala">${escalas(this.unidade(o.g))}</select></td>
+                    <td><input type="number" data-osc="pos" value="${o.pos}" step="0.5" min="-4" max="4"></td>
+                    <td class="osc-medidas" data-medidas="${i}">—</td>
+                    <td><button type="button" class="link-botao" data-tirar-osc="${i}" title="Tirar do osciloscópio">✕</button></td></tr>`).join('')}
+                </tbody></table>`;
+            box.querySelectorAll('tr[data-traco]').forEach((tr) => {
+                const o = this.osc[+tr.dataset.traco];
+                tr.querySelector('[data-osc="escala"]').value = String(o.escala);
+                tr.querySelectorAll('[data-osc]').forEach((inp) => inp.addEventListener('change', () => {
+                    const k = inp.dataset.osc;
+                    if (k === 'g') { o.g = inp.value; o.dados = o.dados.map(() => NaN); o.escala = 'auto'; this.listarOsc(); }
+                    else if (k === 'escala') o.escala = inp.value === 'auto' ? 'auto' : parseFloat(inp.value);
+                    else o.pos = Math.max(-4, Math.min(4, parseFloat(inp.value) || 0));
+                    this.guardar();
+                }));
+            });
+        },
+        /** Índice inicial da janela: com disparo, a última borda que ainda deixa a tela cheia. */
+        inicioJanela(d, n) {
+            let ini = Math.max(0, d.length - n);
+            if (this.oscTrig === 'livre' || !this.osc.length) return ini;
+            const fin = d.filter(isFinite);
+            if (fin.length < 4) return ini;
+            const nivel = this.oscNivel === '' || this.oscNivel === undefined || isNaN(S.valor(this.oscNivel))
+                ? (Math.max(...fin) + Math.min(...fin)) / 2 : S.valor(this.oscNivel);
+            const sobe = this.oscTrig === 'subida';
+            for (let i = d.length - n; i > Math.max(1, d.length - 3 * n); i--) {
+                if (sobe ? (d[i - 1] < nivel && d[i] >= nivel) : (d[i - 1] > nivel && d[i] <= nivel)) return i;
+            }
+            return ini;
+        },
+        medidas(d) {
+            const f = d.filter(isFinite);
+            if (!f.length) return null;
+            const max = Math.max(...f), min = Math.min(...f);
+            const media = f.reduce((a, b) => a + b, 0) / f.length;
+            const rms = Math.sqrt(f.reduce((a, b) => a + b * b, 0) / f.length);
+            // frequência: cruzamentos da média subindo (com histerese de 10 % do pico a pico)
+            const h = (max - min) * 0.1, idx = [];
+            let baixo = false;
+            f.forEach((x, i) => { if (x < media - h) baixo = true; else if (baixo && x > media + h) { idx.push(i); baixo = false; } });
+            const amostraT = this._ppa * this.dt;
+            const freq = idx.length >= 2 && max - min > 1e-12 ? (idx.length - 1) / ((idx[idx.length - 1] - idx[0]) * amostraT) : NaN;
+            return { max, min, pp: max - min, media, rms, freq };
+        },
+        escalaAuto(lim) {
+            // menor 1-2-5 que põe o pico dentro de ±4 divisões
+            const alvo = Math.max(lim, 1e-12) / 4;
+            const p = Math.pow(10, Math.floor(Math.log10(alvo)));
+            for (const m of [1, 2, 5, 10]) if (m * p >= alvo) return m * p;
+            return 10 * p;
         },
         desenharOsc() {
             const cv = $('#osc'), wrap = cv.parentElement;
             const dpr = window.devicePixelRatio || 1, w = wrap.clientWidth, h = wrap.clientHeight;
-            if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.width = w + 'px'; cv.style.height = h + 'px'; }
+            if (!w || !h) return;
+            if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); } // tamanho na tela só pelo CSS
+            this._ppa = this.passosPorAmostra();
             const g = cv.getContext('2d');
             g.setTransform(dpr, 0, 0, dpr, 0, 0);
             g.fillStyle = '#0d2b2c'; g.fillRect(0, 0, w, h);
-            g.strokeStyle = 'rgba(255,255,255,.08)'; g.lineWidth = 1;
-            for (let i = 1; i < 10; i++) { g.beginPath(); g.moveTo(i * w / 10, 0); g.lineTo(i * w / 10, h); g.stroke(); }
-            for (let i = 1; i < 6; i++) { g.beginPath(); g.moveTo(0, i * h / 6); g.lineTo(w, i * h / 6); g.stroke(); }
-            g.strokeStyle = 'rgba(255,255,255,.22)'; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.stroke();
-            const n = Math.floor(w);
+            const DX = 10, DY = 8;
+            g.strokeStyle = 'rgba(255,255,255,.09)'; g.lineWidth = 1;
+            for (let i = 1; i < DX; i++) { g.beginPath(); g.moveTo(i * w / DX, 0); g.lineTo(i * w / DX, h); g.stroke(); }
+            for (let i = 1; i < DY; i++) { g.beginPath(); g.moveTo(0, i * h / DY); g.lineTo(w, i * h / DY); g.stroke(); }
+            g.strokeStyle = 'rgba(255,255,255,.25)'; g.beginPath(); g.moveTo(0, h / 2); g.lineTo(w, h / 2); g.moveTo(w / 2, 0); g.lineTo(w / 2, h); g.stroke();
+            const n = this.amostrasNaTela(w);
+            const ref = this.osc[0] ? this.osc[0].dados : [];
+            const ini = this.inicioJanela(ref, n);
             g.font = '11px Segoe UI, Roboto, Arial'; g.textBaseline = 'top';
             this.osc.forEach((o, k) => {
-                const d = o.dados.slice(-n);
-                if (!d.length) return;
-                let mx = -Infinity, mn = Infinity;
-                d.forEach((x) => { if (isFinite(x)) { mx = Math.max(mx, x); mn = Math.min(mn, x); } });
-                if (!isFinite(mx)) return;
-                const lim = Math.max(Math.abs(mx), Math.abs(mn), o.g === 'V' ? 1e-3 : 1e-9) * 1.1;
+                const d = o.dados.slice(ini, ini + n);
+                const fin = d.filter(isFinite);
+                if (!fin.length) return;
+                const lim = Math.max(...fin.map(Math.abs));
+                const div = o.escala === 'auto' ? this.escalaAuto(lim) : o.escala;
+                const y = (x) => h / 2 - (x / div + o.pos) * (h / DY);
                 g.strokeStyle = o.cor; g.lineWidth = 1.6; g.beginPath();
-                d.forEach((x, i) => { const y = h / 2 - (x / lim) * (h / 2 - 6); i ? g.lineTo(i * w / n, y) : g.moveTo(0, y); });
+                let caneta = false;
+                d.forEach((x, i) => { if (!isFinite(x)) { caneta = false; return; } const px = i * w / n, py = y(x); caneta ? g.lineTo(px, py) : g.moveTo(px, py); caneta = true; });
                 g.stroke();
-                g.fillStyle = o.cor;
-                const u = o.g === 'V' ? 'V' : 'A';
-                g.fillText(`${o.el} ${o.g}: ${S.formatar(d[d.length - 1], u)}  (máx ${S.formatar(mx, u)}, mín ${S.formatar(mn, u)}, escala ±${S.formatar(lim, u)})`, 6, 4 + k * 14);
+                // marcador do zero do traço
+                g.fillStyle = o.cor; g.beginPath(); g.moveTo(0, y(0) - 4); g.lineTo(6, y(0)); g.lineTo(0, y(0) + 4); g.fill();
+                const u = this.unidade(o.g);
+                g.fillText(`${o.el} ${o.g}: ${S.formatar(d[d.length - 1], u)}   ${S.formatar(div, u)}/div${o.escala === 'auto' ? ' (auto)' : ''}`, 10, 4 + k * 14);
+                const m = this.medidas(d), cel = document.querySelector(`[data-medidas="${k}"]`);
+                if (cel && m && (this._medT || 0) < performance.now() - 300) {
+                    cel.textContent = `pp ${S.formatar(m.pp, u)} · méd ${S.formatar(m.media, u)} · RMS ${S.formatar(m.rms, u)}${isFinite(m.freq) ? ' · ' + S.formatar(m.freq, 'Hz') : ''}`;
+                }
             });
-            g.fillStyle = 'rgba(255,255,255,.55)'; g.textBaseline = 'bottom'; g.textAlign = 'right';
-            g.fillText(`tela = ${S.formatar(n * this.oscN * this.dt, 's')}  ·  ${S.formatar(n * this.oscN * this.dt / 10, 's')}/div`, w - 6, h - 4);
+            if ((this._medT || 0) < performance.now() - 300) this._medT = performance.now();
+            g.fillStyle = 'rgba(255,255,255,.6)'; g.textBaseline = 'bottom'; g.textAlign = 'right';
+            const tdiv = n * this._ppa * this.dt / DX;
+            g.fillText(`${S.formatar(tdiv, 's')}/div${this.oscTdiv === 'auto' ? ' (auto)' : ''}${this.oscTrig !== 'livre' ? ' · disparo ' + this.oscTrig : ''}${this.oscCongelado ? ' · CONGELADO' : ''}`, w - 6, h - 4);
             g.textAlign = 'left';
         },
 
@@ -288,7 +386,12 @@
             const cor = $('#vel-corrente');
             cor.addEventListener('input', () => { this.fatorCorrente = Math.pow(10, parseFloat(cor.value)); });
             $('#mostrar-corrente').addEventListener('change', (ev) => { this.mostrarCorrente = ev.target.checked; });
-            $('#osc-n').addEventListener('change', (ev) => { this.oscN = parseInt(ev.target.value, 10) || 5; this.osc.forEach((o) => { o.dados = []; }); });
+            const td = $('#osc-tdiv');
+            td.innerHTML = '<option value="auto">automático</option>' + [1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5]
+                .map((v) => `<option value="${v}">${S.formatar(v, 's')}/div</option>`).join('');
+            td.addEventListener('change', () => { this.oscTdiv = td.value; this.limparOsc(); this.guardar(); });
+            $('#osc-trig').addEventListener('change', (ev) => { this.oscTrig = ev.target.value; this.guardar(); });
+            $('#osc-nivel').addEventListener('change', (ev) => { this.oscNivel = ev.target.value.trim(); this.guardar(); });
             document.addEventListener('click', (ev) => {
                 const a = ev.target.closest('[data-acao]');
                 if (a) this.acao(a.dataset.acao, a);
@@ -312,6 +415,12 @@
                 case 'zoom-mais': this.ed.zoom(1.25); break;
                 case 'zoom-menos': this.ed.zoom(0.8); break;
                 case 'centralizar': this.enquadrar(); break;
+                case 'area-grande': document.body.classList.toggle('area-grande'); setTimeout(() => this.enquadrar(), 50); break;
+                case 'tela-cheia': {
+                    const c = $('.sim-tela-card');
+                    if (document.fullscreenElement) document.exitFullscreen(); else if (c.requestFullscreen) c.requestFullscreen().then(() => setTimeout(() => this.enquadrar(), 100)).catch(() => this.aviso('O navegador não deixou abrir em tela cheia.'));
+                    break;
+                }
                 case 'desfazer': this.voltar(this.desfazer, this.refazer); break;
                 case 'refazer': this.voltar(this.refazer, this.desfazer); break;
                 case 'novo': if (confirm('Começar um circuito novo? O atual será apagado (salve antes se quiser).')) { this.antes(); this.ed.els = []; this.osc = []; this.listarOsc(); this.reiniciar(); this.guardar(); } break;
@@ -328,6 +437,9 @@
                 case 'osc-v': if (sel) this.adicionarOsc(sel, 'V'); break;
                 case 'osc-i': if (sel) this.adicionarOsc(sel, 'I'); break;
                 case 'osc-limpar': this.osc = []; this.listarOsc(); break;
+                case 'osc-apagar': this.limparOsc(); break;
+                case 'osc-congelar': this.oscCongelado = !this.oscCongelado; alvo.textContent = this.oscCongelado ? '▶ Continuar' : '❄ Congelar'; break;
+                case 'osc-p': if (sel) this.adicionarOsc(sel, 'P'); break;
                 case 'bib-pasta': $('#bib-pasta').click(); break;
                 case 'bib-arquivos': $('#bib-arquivos').click(); break;
                 case 'bib-colar': this.colarModelo(); break;
@@ -390,8 +502,9 @@
             }
             if (!el) { box.innerHTML = '<p class="muted">Clique num componente para ver e editar os valores. Duplo clique também abre aqui.</p>'; return; }
             const d = C.DEFS[el.tipo];
+            Object.keys(d.props || {}).forEach((k) => { if (el.props[k] === undefined) el.props[k] = d.props[k]; }); // arquivos antigos: completa com o ideal
             const campos = (d.campos || []).filter((c) => !c.se || c.se(el.props));
-            const linhas = campos.map((c) => {
+            const html = (c) => {
                 const id = `campo-${c.k}`;
                 const v = el.props[c.k];
                 if (c.tipo === 'bool') return `<label class="campo campo-bool"><input type="checkbox" id="${id}" data-campo="${c.k}" ${v ? 'checked' : ''}> ${esc(c.r)}</label>`;
@@ -411,19 +524,25 @@
                         <button type="button" class="link-botao" data-acao="buscar-modelo" data-busca="subckt">🔎 buscar na biblioteca</button></label>
                         ${s ? `<p class="muted">Pinos: ${s.pinos.map(esc).join(', ')} · arquivo ${esc(s.arquivo)}</p>${s.suporte.ok ? '<p class="ok-txt">✔ roda no tempo real</p>' : `<p class="aviso-txt">⚠ no tempo real faltam: ${esc(s.suporte.falta.join(', '))}</p>`}` : ''}`;
                 }
-                return `<label class="campo"><span>${esc(c.r)}${c.u ? ` <small>(${esc(c.u)})</small>` : ''}</span><input type="text" id="${id}" data-campo="${c.k}" value="${esc(v)}" spellcheck="false"></label>`;
-            }).join('');
+                return `<label class="campo"><span>${esc(c.r)}${c.u ? ` <small>(${esc(c.u)})</small>` : ''}</span><input type="text" id="${id}" data-campo="${c.k}" value="${esc(v)}" spellcheck="false"${c.dica ? ` placeholder="${esc(c.dica)}" title="${esc(c.dica)}"` : ''}></label>${c.dica && c.ni ? `<small class="dica-campo">${esc(c.dica)}</small>` : ''}`;
+            };
+            // não idealidades ficam num bloco à parte; abre sozinho quando alguma estiver em uso
+            const ideal = (c) => { const v = String(el.props[c.k] ?? '').trim(); return c.texto ? !v : (v === '' || v === '0' || C.num(v) === 0 || C.num(v) === Infinity); };
+            const ni = campos.filter((c) => c.ni), emUso = ni.filter((c) => !ideal(c)).length;
+            const linhas = campos.filter((c) => !c.ni).map(html).join('') + (ni.length ? `<details class="nao-ideal"${emUso ? ' open' : ''}>
+                <summary>Não idealidades ${emUso ? `<span class="etiqueta">${emUso} em uso</span>` : '<small>(todas ideais)</small>'}</summary>
+                <p class="muted">Padrão = ideal (0 em série, ∞ em paralelo). Aceita sufixo SPICE e ∞.</p>${ni.map(html).join('')}</details>` : '');
             const inf = this.info(el);
-            const vv = inf.v.length >= 2 && d.bipolo ? inf.v[1] - inf.v[0] : null;
+            const vv = d.bipolo ? this.tensaoEl(el, inf) : null;
             const leitura = d.bipolo
-                ? `<dl class="leitura"><dt>Tensão (p1 − p0)</dt><dd id="lei-v">${S.formatar(vv, 'V')}</dd><dt>Corrente</dt><dd id="lei-i">${S.formatar(inf.i, 'A')}</dd><dt>Potência</dt><dd id="lei-p">${S.formatar(Math.abs(vv * inf.i), 'W')}</dd></dl>`
+                ? `<dl class="leitura"><dt>Tensão</dt><dd id="lei-v">${S.formatar(vv, 'V')}</dd><dt>Corrente</dt><dd id="lei-i">${S.formatar(inf.i, 'A')}</dd><dt>Potência</dt><dd id="lei-p">${S.formatar(Math.abs(vv * inf.i), 'W')}</dd></dl>`
                 : `<dl class="leitura">${(d.nomesPinos || (d.nomesPinosDe ? d.nomesPinosDe(el, this.lib) : ['pino'])).map((n, i) => `<dt>${esc(n)}</dt><dd>${S.formatar(inf.v[i], 'V')}</dd>`).join('')}</dl>`;
             box.innerHTML = `<div class="prop-topo"><b>${esc(el.id)}</b> <span>${esc(d.nome)}</span></div>
                 ${linhas}
                 ${leitura}
                 <div class="prop-botoes">
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-v">📈 No osciloscópio (V)</button>
-                    ${d.bipolo ? '<button type="button" class="btn btn-secondary btn-sm" data-acao="osc-i">📈 (I)</button>' : ''}
+                    ${d.bipolo ? '<button type="button" class="btn btn-secondary btn-sm" data-acao="osc-i">📈 (I)</button><button type="button" class="btn btn-secondary btn-sm" data-acao="osc-p">📈 (P)</button>' : ''}
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="girar" title="Shift+R">⟳ ${d.bipolo ? 'Inverter' : 'Girar'}</button>
                     <button type="button" class="btn btn-secondary btn-sm btn-perigo" data-acao="excluir" title="Delete">🗑 Excluir</button>
                 </div>`;
@@ -433,7 +552,7 @@
                     const k = inp.dataset.campo;
                     const c = campos.find((x) => x.k === k);
                     let val = inp.type === 'checkbox' ? inp.checked : inp.value.trim();
-                    if (inp.type === 'text' && !['pinos', 'titulo'].includes(k) && isNaN(S.valor(val))) { this.aviso(`Valor inválido em ${c.r}: use número com sufixo SPICE (ex.: 4.7k, 10u, 1meg).`); inp.value = el.props[k]; return; }
+                    if (inp.type === 'text' && !['pinos', 'titulo'].includes(k) && !(c && c.texto) && isNaN(c && c.ni ? C.num(val) : S.valor(val))) { this.aviso(`Valor inválido em ${c.r}: use número com sufixo SPICE (ex.: 4.7k, 10u, 1meg)${c.ni ? ' ou ∞' : ''}.`); inp.value = el.props[k]; return; }
                     el.props[k] = val;
                     this.mudouValor(el);
                 });
@@ -442,7 +561,7 @@
         atualizarLeitura() {
             const el = this.ed.selecionado();
             if (!el || !C.DEFS[el.tipo].bipolo) return;
-            const inf = this.info(el), vv = inf.v[1] - inf.v[0];
+            const inf = this.info(el), vv = this.tensaoEl(el, inf);
             const a = $('#lei-v'); if (!a) return;
             a.textContent = S.formatar(vv, 'V'); $('#lei-i').textContent = S.formatar(inf.i, 'A'); $('#lei-p').textContent = S.formatar(Math.abs(vv * inf.i), 'W');
         },
@@ -452,7 +571,7 @@
             const d = C.DEFS[el.tipo], inf = this.info(el);
             let txt = `<b>${esc(el.id)}</b> ${esc(d.curto || d.nome)}`;
             if (d.texto && d.texto(el)) txt += ` · ${esc(d.texto(el))}`;
-            if (d.bipolo) { const vv = inf.v[1] - inf.v[0]; txt += `<br>V = ${S.formatar(vv, 'V')} · I = ${S.formatar(inf.i, 'A')} · P = ${S.formatar(Math.abs(vv * inf.i), 'W')}`; }
+            if (d.bipolo) { const vv = this.tensaoEl(el, inf); txt += `<br>V = ${S.formatar(vv, 'V')} · I = ${S.formatar(inf.i, 'A')} · P = ${S.formatar(Math.abs(vv * inf.i), 'W')}`; }
             else txt += '<br>' + (d.nomesPinos || (d.nomesPinosDe ? d.nomesPinosDe(el, this.lib) : ['pino'])).map((n, i) => `${esc(n)}: ${S.formatar(inf.v[i], 'V')}`).join(' · ');
             box.innerHTML = txt; box.hidden = false;
             void pt;
@@ -533,7 +652,7 @@
         },
 
         // ------------------------------------------------------------ arquivos
-        dados() { return { formato: 'simulador-falstad-spice', versao: 1, els: this.ed.els.map((e) => { const c = Object.assign({}, e); delete c._fase; return c; }), dt: this.dt, velocidade: this.velocidade, osc: this.osc.map((o) => ({ el: o.el, g: o.g })), oscN: this.oscN }; },
+        dados() { return { formato: 'simulador-falstad-spice', versao: 1, els: this.ed.els.map((e) => { const c = Object.assign({}, e); delete c._fase; return c; }), dt: this.dt, velocidade: this.velocidade, osc: this.osc.map((o) => ({ el: o.el, g: o.g, escala: o.escala, pos: o.pos })), oscN: this.oscN, oscTdiv: this.oscTdiv, oscTrig: this.oscTrig, oscNivel: this.oscNivel }; },
         guardar() { clearTimeout(this._g); this._g = setTimeout(() => salvarLS(CHAVE_CIRCUITO, this.dados()), 300); },
         abrirDados(d, silencioso) {
             if (!d || !Array.isArray(d.els)) { this.aviso('Arquivo de circuito inválido.'); return; }
@@ -543,11 +662,12 @@
             this.oscN = d.oscN || 5;
             $('#passo').value = S.formatar(this.dt, 's').replace(/ /g, '');
             $('#velocidade').value = this.velocidade;
-            $('#osc-n').value = String(this.oscN);
+            this.oscTdiv = d.oscTdiv || 'auto'; this.oscTrig = d.oscTrig || 'livre'; this.oscNivel = d.oscNivel || '';
+            $('#osc-tdiv').value = this.oscTdiv; $('#osc-trig').value = this.oscTrig; $('#osc-nivel').value = this.oscNivel;
             this.ed.selecionarSo(null); this.selecionou(null);
             this.reiniciar();
             this.osc = [];
-            (d.osc || []).forEach((o) => { const el = this.ed.el(o.el); if (el) this.adicionarOsc(el, o.g); });
+            (d.osc || []).forEach((o) => { const el = this.ed.el(o.el); if (el) this.adicionarOsc(el, o.g, { escala: o.escala || 'auto', pos: o.pos || 0 }); });
             this.listarOsc();
             this.enquadrar();
             if (!silencioso) this.guardar();
@@ -602,6 +722,7 @@
                 if (k === '-') { this.ed.zoom(0.8); return; }
                 if (k === '0') { this.ed.zoom(1 / this.ed.vista.z); return; }
                 if (k === '/') { ev.preventDefault(); $('#bib-busca').focus(); return; }
+                if (k === 'f') { this.enquadrar(); return; }
                 if (k === 'R' && ev.shiftKey) { this.acao('girar'); return; }
                 const t = Object.entries(C.DEFS).find(([, d]) => d.tecla === k); // diferencia maiúscula: l = LED, L = indutor
                 if (t) this.escolherFerramenta(t[0]);
