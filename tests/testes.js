@@ -522,5 +522,38 @@ let passou = 0;
 TESTES.forEach((t) => {
     try { t.f(); passou++; console.log('  ok  ' + t.nome); } catch (e) { console.log('FALHOU ' + t.nome + '\n      ' + e.message); }
 });
-console.log(`\n${passou} de ${TESTES.length} passaram`);
-if (passou !== TESTES.length) process.exitCode = 1;
+// ---------------------------------------------------------------- ngspice (assíncrono, roda o netlist exportado)
+async function testesNgspice() {
+    const An = require('../js/analises.js');
+    const { Simulation } = await import(require('url').pathToFileURL(require('path').join(__dirname, '../vendor/eecircuit/eecircuit-engine.mjs')).href);
+    const sim = new Simulation(); await sim.start();
+    const casos = [
+        ['ngspice .op do emissor comum: base ≈ 2,05 V e coletor ≈ 5,65 V', async () => {
+            const ex = EXEMPLOS.find((e) => e.id === 'emissor-comum'), els = comIds(ex.els);
+            const r = await An.rodar(sim, Circuito.exportarSpice(els, lib(), { analise: ['.op'], shunt: true }));
+            const ss = An.saidas(els, lib()), v = (id) => An.valoresSaida(r, ss.find((x) => x.id === id))[0];
+            perto(v('Q1.1'), 2.05, 0.05, 'base'); perto(v('Q1.0'), 5.65, 0.15, 'coletor');
+        }],
+        ['ngspice .ac do emissor comum: ganho ≈ 3,7 em 1 kHz', async () => {
+            const ex = EXEMPLOS.find((e) => e.id === 'emissor-comum'), els = comIds(ex.els);
+            const r = await An.rodar(sim, Circuito.exportarSpice(els, lib(), { analise: ['.ac dec 10 100 10k'], acFonte: 'V3', shunt: true }));
+            const ss = An.saidas(els, lib()), out = An.valoresSaida(r, ss.find((x) => x.id === 'R5'));
+            const i = r.data[0].values.findIndex((f) => Math.abs((f.real ?? f) - 1000) < 1);
+            perto(Math.hypot(out[i].real, out[i].img), 3.7, 0.3);
+        }],
+        ['Fourier de uma senoide pura tem THD ≈ 0', async () => {
+            const t = [], y = []; for (let i = 0; i <= 4000; i++) { t.push(i * 1e-6); y.push(Math.sin(2 * Math.PI * 1000 * i * 1e-6)); }
+            const f = An.fourier(t, y, 1000); perto(f.harm[0].amp, 1, 0.01); ok(f.thd < 0.01, 'thd ' + f.thd);
+        }]
+    ];
+    for (const [nome, f] of casos) {
+        try { await f(); passou++; console.log('  ok  ' + nome); } catch (e) { console.log('FALHOU ' + nome + '\n      ' + e.message); }
+    }
+    return casos.length;
+}
+
+testesNgspice().then((n) => {
+    console.log(`\n${passou} de ${TESTES.length + n} passaram`);
+    if (passou !== TESTES.length + n) process.exitCode = 1;
+    process.exit();
+}).catch((e) => { console.log('FALHOU ngspice: ' + e.message); process.exitCode = 1; });

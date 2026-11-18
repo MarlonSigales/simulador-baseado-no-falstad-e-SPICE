@@ -1,0 +1,25 @@
+eecircuit-engine.mjs = pacote eecircuit-engine 1.9.0 (ngspice compilado para WebAssembly), https://github.com/eelab-dev/EEcircuit-engine
+Licença do pacote: MIT (abaixo). O ngspice embutido é distribuído sob a licença BSD modificada do projeto ngspice (https://ngspice.sourceforge.io/).
+Os modelcards de PDK embutidos (FreePDK, GF180, SkyWater, PTM) seguem as licenças dos respectivos projetos.
+
+MIT License
+
+Copyright (c) 2024 EElab.dev
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

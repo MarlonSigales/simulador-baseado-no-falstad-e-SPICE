@@ -26,12 +26,12 @@ Tudo roda no navegador: HTML, CSS e JavaScript puros, sem servidor e sem CDN. Qu
   e o subcircuito é expandido em primitivos (inclusive subcircuitos dentro de subcircuitos).
 - O que o tempo real ainda não roda (PARAMS, `{expressões}`, B, VALUE/POLY) é marcado como "parcial".
 
-## 3. Análises SPICE completas (ngspice em WebAssembly) — a fazer
-- Incluir o ngspice compilado para WebAssembly (por exemplo o pacote do eecircuit-engine, MIT) em `vendor/`, rodando num Web Worker.
-- Usar o netlist que o botão "Netlist SPICE" já gera.
-- Telas: ponto de operação sobre o desenho, Bode (.ac), curva DC (.dc), ruído, Fourier/THD, `.step`, temperatura e Monte Carlo.
-- Os subcircuitos marcados como "parcial" passam a rodar aqui.
-- Protótipo a validar: transitório interativo pelo ngspice compartilhado (`bg_halt`/`alter`/`bg_resume`).
+## 3. Análises SPICE completas (`js/analises.js`, `js/analises-ui.js`) — feito
+- ngspice compilado para WebAssembly (`vendor/eecircuit/eecircuit-engine.mjs`, MIT; ngspice BSD), importado sob demanda.
+- Usa o netlist do exportador (`Circuito.exportarSpice`) com `analise`, `acFonte`, `temp` e `shunt` (1 TΩ ao terra em cada nó).
+- Ponto de operação, AC/Bode, DC, transitório, ruído, Fourier/THD (calculado do transitório), paramétrica, temperatura e Monte Carlo.
+- Subcircuitos com fontes B, PARAMS e expressões, que o tempo real não roda, funcionam aqui.
+- Falta: transitório interativo pelo ngspice compartilhado (`bg_halt`/`alter`/`bg_resume`).
 
 ## 4. Bloco Microcontrolador (`js/mcu.js`) — feito
 Os pinos viram primitivos `PINO` no motor: saída = fonte (ideal ou com Rout), entrada = corrente zero (com pull-up opcional).

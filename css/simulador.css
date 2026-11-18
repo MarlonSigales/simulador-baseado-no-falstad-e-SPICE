@@ -142,3 +142,16 @@ body.area-grande .sim-tela { height: calc(100vh - 170px); }
 .fw-msg.ok { color: var(--verde-escuro); font-weight: 600; }
 .fw-botoes { display: flex; gap: 0.4rem; justify-content: flex-end; }
 @media (max-width: 760px) { .fw-corpo { grid-template-columns: 1fr; } #fw-codigo { height: 45vh; } }
+
+/* análises SPICE */
+.dlg-analises { width: min(1200px, 97vw); max-height: 94vh; border: 0; border-radius: 10px; padding: 0.9rem 1rem; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.dlg-analises::backdrop { background: rgba(8, 40, 42, .45); }
+.an-grade { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0.9rem; margin-top: 0.6rem; align-items: start; }
+.an-form { max-height: 80vh; overflow: auto; padding-right: 0.3rem; }
+.an-form .campo input[type=text], .an-form .campo select { font: inherit; font-size: 0.88rem; padding: 0.3rem 0.45rem; border: 1px solid var(--borda); border-radius: 6px; width: 100%; }
+.an-saidas { max-height: 190px; overflow: auto; border: 1px solid var(--borda); border-radius: 6px; padding: 0.3rem 0.4rem; display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.8rem; }
+.an-resultado { min-height: 300px; overflow: auto; max-height: 82vh; }
+.an-graf { width: 100%; height: 260px; display: block; border-radius: 6px; margin-bottom: 0.6rem; }
+.an-graf-alto { height: 420px; }
+.an-netlist { font: 0.78rem/1.4 Consolas, monospace; background: #0d2b2c; color: #e8f3ef; padding: 0.6rem; border-radius: 6px; white-space: pre-wrap; }
+@media (max-width: 860px) { .an-grade { grid-template-columns: 1fr; } }

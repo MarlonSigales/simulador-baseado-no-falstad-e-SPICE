@@ -45,7 +45,10 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 11 [resolvido 18/11/2026] Modo B: Arduino Uno (ATmega328P) emulado pelo avr8js (vendor/avr8js, MIT) com GPIO, timers 0/1/2, USART (monitor serial) e ADC,
    rodando o .hex do Arduino IDE; exemplo pisca-d13.hex montado à mão em tests/gerar-hex-pisca.js.
 26 [futuro] RP2040 (rp2040js) e compilar o sketch .ino no navegador (avr-gcc em WebAssembly) para o Uno.
-12 [fazer] ngspice em WebAssembly (vendor/, Web Worker): .op sobre o desenho, Bode (.ac), curva DC, ruído, Fourier/THD, .step, temperatura, Monte Carlo.
+12 [resolvido 18/11/2026] ngspice em WebAssembly (vendor/eecircuit, eecircuit-engine MIT + ngspice BSD, 20 MB carregados só na 1ª análise):
+   botão "📊 Análises SPICE" com ponto de operação (tabela + tensões no desenho), AC/Bode (ganho e fase), varredura DC, transitório,
+   ruído (saída e referido à entrada), Fourier/THD (9 harmônicas), e as variações paramétrica, temperatura e Monte Carlo (tolerância de R, C, L).
+   Cuidados: netlist só em ASCII (acentos/Ω/travessão travavam o ngspice), 1 TΩ de cada nó ao terra (nó solto travava) e limite de 30 s.
 13 [resolvido 18/11/2026] Capacitâncias de junção (CJO, CJE, CJC) e resistências série no tempo real, como capacitores lineares (falta a dependência com a tensão e TT).
 14 [resolvido 18/11/2026] Mais componentes (js/componentes-extra.js): potenciômetro (roda do mouse gira o cursor), eletrolítico (C), chave de 2 posições (S),
    transformador com Lp, relação, k e resistências (T), lâmpada com filamento aquecendo, relé com bobina e contatos NA/NF (R), amperímetro,
@@ -56,7 +59,7 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
 
 === QA (18/11/2026)
-- node tests/testes.js: 51 de 51 passaram (microcontrolador: pisca no tempo simulado com A0, PWM no RC, erro com a linha, pull-up, Arduino Uno com .hex; potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- node tests/testes.js: 54 de 54 passaram (ngspice: .op e .ac do emissor comum contra o tempo real, Fourier; microcontrolador: pisca no tempo simulado com A0, PWM no RC, erro com a linha, pull-up, Arduino Uno com .hex; potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
 - Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
   "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

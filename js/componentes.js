@@ -289,7 +289,7 @@
             },
             spice(el, n, ctx) {
                 const r = num(el.props.Rint), k = r > 0 && isFinite(r) ? ctx.novoNo('INT') : n[1];
-                return `${nm('V', el)} ${k} ${n[0]} ${spiceFonte(el.props)}` + (k !== n[1] ? `\nR${el.id}_INT ${k} ${n[1]} ${r}` : '');
+                return `${nm('V', el)} ${k} ${n[0]} ${spiceFonte(el.props)}${ctx.acFonte === el.id ? ' AC 1' : ''}` + (k !== n[1] ? `\nR${el.id}_INT ${k} ${n[1]} ${r}` : '');
             }
         },
         trilho: {
@@ -314,7 +314,7 @@
             },
             spice(el, n, ctx) {
                 const r = num(el.props.Rint), k = r > 0 && isFinite(r) ? ctx.novoNo('INT') : n[0];
-                return `${nm('V', el)} ${k} 0 ${spiceFonte(el.props)}` + (k !== n[0] ? `\nR${el.id}_INT ${k} ${n[0]} ${r}` : '');
+                return `${nm('V', el)} ${k} 0 ${spiceFonte(el.props)}${ctx.acFonte === el.id ? ' AC 1' : ''}` + (k !== n[0] ? `\nR${el.id}_INT ${k} ${n[0]} ${r}` : '');
             }
         },
         fonteI: {

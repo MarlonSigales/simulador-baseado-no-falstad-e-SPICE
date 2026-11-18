@@ -284,6 +284,20 @@
                 if (n >= 3) { g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fill(); }
                 else if (n === 1) { g.save(); g.strokeStyle = '#b3261e'; g.lineWidth = 1.2; g.beginPath(); g.arc(x, y, 3, 0, 7); g.stroke(); g.restore(); }
             });
+            // tensões do ponto de operação do ngspice (Análises SPICE → Mostrar no desenho)
+            const op = app.opOverlay;
+            if (op && app.net) {
+                const feitos = new Set();
+                g.font = 'bold 10px Segoe UI, Roboto, Arial'; g.textBaseline = 'bottom'; g.textAlign = 'left';
+                this.els.forEach((el) => (app.net.pinos[el.id] || []).forEach((k, i) => {
+                    if (!k || feitos.has(k) || op[k] === undefined) return;
+                    feitos.add(k);
+                    const [x, y] = C.pinos(el, app.lib)[i];
+                    const t = S.formatar(op[k], 'V'), w = g.measureText(t).width + 6;
+                    g.fillStyle = 'rgba(8,83,87,.88)'; g.fillRect(x + 4, y - 16, w, 13);
+                    g.fillStyle = '#fff'; g.fillText(t, x + 7, y - 4);
+                }));
+            }
             // ponto sob o mouse
             if (this.mouse && this.ferramenta !== 'selecionar' && !this.arrasto) {
                 const [x, y] = this.grade(this.mouse);

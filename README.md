@@ -35,7 +35,8 @@ HTML, CSS e JavaScript puros, sem servidor e sem bibliotecas externas.
 - **Microcontrolador** (tecla `u`): firmware em C no estilo Arduino (setup/loop, digitalWrite, analogRead, PWM, delay, printf)
   rodando junto com o tempo simulado, com editor e monitor serial; e **Arduino Uno emulado** (ATmega328P) rodando o .hex do Arduino IDE.
 
-Próximas etapas (ver `ARQUITETURA.md` e `todoQA.txt`): análises do ngspice em WebAssembly (.op, .ac, .dc, ruído, Fourier, .step, Monte Carlo).
+- **📊 Análises SPICE (ngspice no navegador):** ponto de operação (com as tensões no desenho), AC/Bode, varredura DC, transitório,
+  ruído, Fourier/THD e as variações paramétrica, temperatura e Monte Carlo. O ngspice (20 MB) é baixado só na primeira análise.
 
 ## Pôr modelos na pasta do repositório
 
@@ -47,7 +48,7 @@ Para modelos só seus, sem publicar: botão **📁 Abrir pasta de modelos** no p
 
 ## Testes
 
-`node tests/testes.js` (51 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
+`node tests/testes.js` (54 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
 
 ## Arquivos
 
@@ -64,8 +65,10 @@ js/biblioteca.js         biblioteca de modelos e busca
 js/editor.js             editor no canvas
 js/app.js                controles, osciloscópio, propriedades, biblioteca, arquivos
 js/mcu.js                microcontrolador (firmware C e Arduino Uno emulado)
+js/analises.js           análises no ngspice (netlist, resultados, Fourier, Monte Carlo, gráficos)
+js/analises-ui.js        janela das análises
 js/exemplos.js           circuitos de exemplo
-vendor/                  JSCPP e avr8js (MIT), com as licenças
+vendor/                  JSCPP, avr8js e eecircuit-engine/ngspice, com as licenças
 js/modelos-embutidos.js  cópia de modelos/*.lib (para abrir do disco)
 modelos/                 pasta de modelos SPICE (+ indice.json)
 tests/                   testes e gerador dos modelos embutidos

@@ -47,6 +47,7 @@
                         <button type="button" class="btn btn-sm" data-acao="rodar">⏸ Pausar</button>
                         <button type="button" class="btn btn-secondary btn-sm" data-acao="passo" title="Avança um passo de tempo">⏭ Passo</button>
                         <button type="button" class="btn btn-secondary btn-sm" data-acao="reiniciar" title="Volta ao tempo zero (descarrega capacitores e indutores)">⟲ Reiniciar</button>
+                        <button type="button" class="btn btn-primary btn-sm" data-acao="analises" title="Ponto de operação, Bode, DC, transitório, ruído, Fourier, paramétrica, temperatura e Monte Carlo no ngspice">📊 Análises SPICE</button>
                         <label class="sim-campo">Velocidade <select id="velocidade"></select></label>
                         <label class="sim-campo">Passo de tempo <input id="passo" type="text" value="10µs" size="6" spellcheck="false" title="Aceita sufixo SPICE: 1u, 10u, 1m"></label>
                         <span class="sim-campo">t = <b id="tempo-sim">0 s</b> <small title="Tempo simulado por segundo real">(<span id="razao">—</span>)</small></span>
@@ -224,6 +225,8 @@
     <script src="js/modelos-embutidos.js?v=20261118c"></script>
     <script src="js/exemplos.js?v=20261118c"></script>
     <script src="js/editor.js?v=20261118c"></script>
+    <script src="js/analises.js?v=20261118c"></script>
+    <script src="js/analises-ui.js?v=20261118c"></script>
     <script src="js/app.js?v=20261118c"></script>
 </body>
 </html>

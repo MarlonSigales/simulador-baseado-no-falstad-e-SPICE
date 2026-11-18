@@ -40,6 +40,7 @@
             this.montarMenu();
             this.montarControles();
             this.montarBiblioteca();
+            if (window.AnalisesUI) window.AnalisesUI.montar(this);
             const salvo = lerLS(CHAVE_CIRCUITO);
             if (salvo && Array.isArray(salvo.els) && salvo.els.length) this.abrirDados(salvo, true);
             else this.abrirExemplo('rc');
@@ -110,8 +111,8 @@
             this.ed.selecionarSo(null); this.selecionou(null);
             this.mudouTopologia();
         },
-        mudouTopologia() { this.reconstruir(); this.guardar(); },
-        mudouValor(el) { this.reconstruir(); this.guardar(); if (el && el.id === this.ed.sel) this.mostrarPropriedades(el); },
+        mudouTopologia() { this.opOverlay = null; this.reconstruir(); this.guardar(); },
+        mudouValor(el) { this.opOverlay = null; this.reconstruir(); this.guardar(); if (el && el.id === this.ed.sel) this.mostrarPropriedades(el); },
 
         reconstruir() {
             const estados = this.motor ? this.motor.estados() : null;
@@ -430,6 +431,7 @@
                 case 'zoom-mais': this.ed.zoom(1.25); break;
                 case 'zoom-menos': this.ed.zoom(0.8); break;
                 case 'centralizar': this.enquadrar(); break;
+                case 'analises': if (window.AnalisesUI) window.AnalisesUI.abrir(); break;
                 case 'editar-firmware': if (sel) this.abrirFirmware(sel); break;
                 case 'firmware-carregar': this.carregarFirmware(); break;
                 case 'firmware-fechar': $('#dlg-firmware').close(); break;

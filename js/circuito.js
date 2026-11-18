@@ -134,7 +134,8 @@
     function exportarSpice(elementos, lib, opcoes = {}) {
         const r = nos(elementos, lib);
         const usados = new Set(), subUsados = new Set(), padroes = new Map();
-        const nomeNo = (k) => (k === 0 ? '0' : 'N' + k);
+        const nosUsados = new Set();
+        const nomeNo = (k) => { if (k === 0) return '0'; nosUsados.add('N' + k); return 'N' + k; };
         let idAtual = '';
         const ctx = {
             modeloDe(nome, padrao) { return (nome && lib && lib.modelo(nome)) || padrao; },
@@ -154,7 +155,8 @@
                 padroes.set(padrao.nome, padrao);
                 return padrao.nome;
             },
-            novoNo: (suf) => `N_${idAtual}_${suf}`,
+            novoNo: (suf) => { const n = `N_${idAtual}_${suf}`; nosUsados.add(n); return n; },
+            acFonte: opcoes.acFonte || null,
             usarSubckt(nome) { subUsados.add(String(nome).toUpperCase()); }
         };
         const linhas = [`* ${opcoes.titulo || 'Circuito'} — exportado pelo Simulador de Circuitos (Falstad + SPICE), Marlon Sigales`];
@@ -182,9 +184,15 @@
         usados.forEach((n) => linhas.push(lib.modelo(n).texto));
         subUsados.forEach((n) => { const s = lib && lib.subckt(n); if (s) linhas.push(s.texto); });
         linhas.push('');
-        linhas.push(`.tran ${opcoes.passo || '10u'} ${opcoes.tempo || '10m'}`);
+        // análises: resistência enorme de cada nó ao terra, para nó solto não travar o ngspice (matriz singular)
+        if (opcoes.shunt) { linhas.push('* resistências de 1 TΩ ao terra (evitam nó solto)'); [...nosUsados].forEach((n, i) => linhas.push(`RSH${i + 1} ${n} 0 1e12`)); }
+        if (opcoes.temp !== undefined && opcoes.temp !== null && opcoes.temp !== '') linhas.push(`.options temp=${opcoes.temp}`);
+        if (opcoes.analise) linhas.push(...[].concat(opcoes.analise));
+        else linhas.push(`.tran ${opcoes.passo || '10u'} ${opcoes.tempo || '10m'}`);
         linhas.push('.end');
-        return linhas.join('\n');
+        // só ASCII: o ngspice (e o LTspice) se perdem com acentos, Ω, µ e travessão no netlist
+        return linhas.join('\n').replace(/Ω/g, 'ohm').replace(/[µμ]/g, 'u').replace(/[—–]/g, '-').replace(/°/g, ' graus')
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x00-\x7F]/g, '?');
     }
 
     const API = { nos, construir, exportarSpice };
