@@ -54,12 +54,18 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
    transformador com Lp, relação, k e resistências (T), lâmpada com filamento aquecendo, relé com bobina e contatos NA/NF (R), amperímetro,
    portas NÃO/E/NÃO-E/OU/NÃO-OU/XOR/XNOR (1 2 @ 3 # 4 $), entrada lógica (i), saída lógica (o), rótulo de nó (b), texto (t) e fonte PWL.
    Teclas iguais às do Falstad; o Shift+R de girar saiu porque R é o relé no Falstad (girar fica no botão).
-15 [futuro] Abrir pasta com a File System Access API (lembrar a pasta entre sessões) e pasta de modelos na nuvem MEGA da equipe.
-16 [futuro] Importar o formato de texto do Falstad (circuitjs) para reaproveitar circuitos prontos.
+15 [resolvido 18/11/2026] Pasta de modelos lembrada entre as sessões (File System Access API, Chrome/Edge): "Abrir pasta" guarda a pasta e,
+   ao voltar, relê sozinha (ou mostra "Reabrir a pasta" se o navegador pedir permissão). Nos outros navegadores, a seleção comum.
+27 [futuro] Pasta de modelos na nuvem MEGA da equipe (como nos outros apps), se quiser compartilhar a biblioteca do grupo.
+16 [resolvido 18/11/2026] Importar do Falstad: texto (File → Export As Text), arquivo .txt ou link (?ctz= / ?cct=, inclusive abrindo este app com ?ctz=...).
+   Converte fios, R, C, L, fontes (DC/seno/quadrada), trilhos, terra, chaves (1 e 2 posições), diodo, zener, LED, lâmpada, amperímetro, ponta de prova,
+   NPN/PNP, MOSFET N/P, amp-op, portas, inversor, entrada/saída lógica, potenciômetro, rótulos e texto; componentes de vários pinos ficam ligados
+   por fios aos pontos originais. Teste com os 335 circuitos de exemplo do Falstad: todos importam e simulam sem erro (189 com algum elemento sem equivalente).
+   Para isso o motor ganhou Newton amortecido com MOSFET (portas CMOS) e LAMBDA = 0,01 nos MOSFETs padrão; trilhos/portas/amp-op usam o terra implícito.
 17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
 
 === QA (18/11/2026)
-- node tests/testes.js: 54 de 54 passaram (ngspice: .op e .ac do emissor comum contra o tempo real, Fourier; microcontrolador: pisca no tempo simulado com A0, PWM no RC, erro com a linha, pull-up, Arduino Uno com .hex; potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- node tests/testes.js: 56 de 56 passaram (importar do Falstad por texto e por link; ngspice: .op e .ac do emissor comum contra o tempo real, Fourier; microcontrolador: pisca no tempo simulado com A0, PWM no RC, erro com a linha, pull-up, Arduino Uno com .hex; potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
 - Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
   "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

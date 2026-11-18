@@ -8,8 +8,8 @@
     <meta name="description" content="Simulador de circuitos em tempo real no navegador, com a usabilidade do simulador do Prof. Falstad e modelos SPICE (.model e .subckt) para os componentes.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261118c">
-    <link rel="stylesheet" href="css/simulador.css?v=20261118c">
+    <link rel="stylesheet" href="css/style.css?v=20261118d">
+    <link rel="stylesheet" href="css/simulador.css?v=20261118d">
 </head>
 <body>
     <header class="topbar">
@@ -33,6 +33,7 @@
                     <button type="button" class="sidebar-btn2" data-acao="abrir" title="Abrir um circuito salvo (.json)">📂 Abrir</button>
                     <button type="button" class="sidebar-btn2" data-acao="exportar-spice" title="Netlist para ngspice/LTspice">⤓ Netlist SPICE</button>
                     <button type="button" class="sidebar-btn2" data-acao="novo">✚ Novo</button>
+                    <button type="button" class="sidebar-btn2 sidebar-largo" data-acao="importar-falstad" title="Cole o texto exportado ou o link de um circuito do falstad.com">⤒ Importar do Falstad</button>
                 </div>
                 <input type="file" id="abrir-json" accept=".json,application/json" hidden>
                 <input type="file" id="abrir-hex" accept=".hex,.ihx,text/plain" hidden>
@@ -106,6 +107,7 @@
                                 <div class="bib-botoes">
                                     <button type="button" class="btn btn-primary btn-sm" data-acao="bib-pasta" title="Lê todos os .lib/.mod/.sub/.cir/.txt da pasta e subpastas">📁 Abrir pasta de modelos</button>
                                     <button type="button" class="btn btn-secondary btn-sm" data-acao="bib-arquivos">📄 Arquivos</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-acao="bib-reabrir" id="bib-reabrir" hidden>↻ Reabrir a pasta</button>
                                 </div>
                                 <input type="file" id="bib-pasta" webkitdirectory directory multiple hidden>
                                 <input type="file" id="bib-arquivos" multiple accept=".lib,.mod,.sub,.cir,.txt,.sp,.spi,.spice,.inc,.ckt,.model" hidden>
@@ -190,6 +192,15 @@
 
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
+    <dialog id="dlg-falstad" class="dlg-firmware" aria-labelledby="fal-titulo">
+        <div class="fw-topo"><h2 id="fal-titulo">Importar do simulador do Falstad</h2><button type="button" class="link-botao" data-acao="falstad-fechar" aria-label="Fechar">✕</button></div>
+        <p class="muted">No Falstad: <b>File → Export As Text</b> (ou <b>Export As Link</b>) e cole aqui; também dá para abrir o arquivo .txt. Os componentes de vários pinos entram com o desenho deste app, ligados por fios aos pontos originais.</p>
+        <textarea id="fal-texto" rows="12" spellcheck="false" placeholder="$ 1 0.000005 10.2 50 5 43&#10;r 176 80 384 80 0 10&#10;...&#10;ou https://www.falstad.com/circuit/circuitjs.html?ctz=..."></textarea>
+        <p class="fw-msg" id="fal-msg"></p>
+        <div class="fw-botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="falstad-arquivo">📂 Abrir .txt</button><button type="button" class="btn btn-primary btn-sm" data-acao="falstad-importar">⤒ Importar</button></div>
+        <input type="file" id="fal-arquivo" accept=".txt,text/plain" hidden>
+    </dialog>
+
     <dialog id="dlg-firmware" class="dlg-firmware" aria-labelledby="fw-titulo">
         <div class="fw-topo"><h2 id="fw-titulo">Firmware</h2><button type="button" class="link-botao" data-acao="firmware-fechar" aria-label="Fechar">✕</button></div>
         <div class="fw-corpo">
@@ -213,20 +224,22 @@
         <div class="fw-botoes"><button type="button" class="btn btn-primary btn-sm" data-acao="firmware-carregar">▶ Carregar no microcontrolador</button><button type="button" class="btn btn-secondary btn-sm" data-acao="firmware-fechar">Fechar</button></div>
     </dialog>
 
-    <script src="js/spice.js?v=20261118c"></script>
-    <script src="js/motor.js?v=20261118c"></script>
-    <script src="js/componentes-extra.js?v=20261118c"></script>
-    <script src="js/componentes.js?v=20261118c"></script>
-    <script src="vendor/jscpp/jscpp.min.js?v=20261118c"></script>
-    <script src="vendor/avr8js/avr8js.min.js?v=20261118c"></script>
-    <script src="js/mcu.js?v=20261118c"></script>
-    <script src="js/biblioteca.js?v=20261118c"></script>
-    <script src="js/circuito.js?v=20261118c"></script>
-    <script src="js/modelos-embutidos.js?v=20261118c"></script>
-    <script src="js/exemplos.js?v=20261118c"></script>
-    <script src="js/editor.js?v=20261118c"></script>
-    <script src="js/analises.js?v=20261118c"></script>
-    <script src="js/analises-ui.js?v=20261118c"></script>
-    <script src="js/app.js?v=20261118c"></script>
+    <script src="js/spice.js?v=20261118d"></script>
+    <script src="js/motor.js?v=20261118d"></script>
+    <script src="js/componentes-extra.js?v=20261118d"></script>
+    <script src="js/componentes.js?v=20261118d"></script>
+    <script src="vendor/jscpp/jscpp.min.js?v=20261118d"></script>
+    <script src="vendor/avr8js/avr8js.min.js?v=20261118d"></script>
+    <script src="js/mcu.js?v=20261118d"></script>
+    <script src="js/biblioteca.js?v=20261118d"></script>
+    <script src="js/circuito.js?v=20261118d"></script>
+    <script src="js/modelos-embutidos.js?v=20261118d"></script>
+    <script src="vendor/lz-string/lz-string.min.js?v=20261118d"></script>
+    <script src="js/importar-falstad.js?v=20261118d"></script>
+    <script src="js/exemplos.js?v=20261118d"></script>
+    <script src="js/editor.js?v=20261118d"></script>
+    <script src="js/analises.js?v=20261118d"></script>
+    <script src="js/analises-ui.js?v=20261118d"></script>
+    <script src="js/app.js?v=20261118d"></script>
 </body>
 </html>

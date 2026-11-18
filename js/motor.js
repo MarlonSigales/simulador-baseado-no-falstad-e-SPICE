@@ -13,7 +13,7 @@
 (function (raiz) {
     const VT = 0.025852;          // kT/q a 27 °C
     const GMIN = 1e-12;
-    const MAX_ITER = 120;
+    const MAX_ITER = 200;
 
     const PADRAO = {
         D: { IS: 1e-14, N: 1, RS: 0, BV: Infinity, IBV: 1e-3 },
@@ -144,6 +144,9 @@
                 }
             });
             this.nRamos = ramo;
+            const nm = new Set();
+            this.prims.forEach((p) => { if (p.tipo === 'M') p.nos.forEach((k) => { if (k > 0) nm.add(k); }); });
+            this.nosMOS = nm.size ? [...nm] : null;
             this.n = this.nNos - 1 + ramo;
             this.x = new Float64Array(this.n);
             this.A = new Float64Array(this.n * this.n);
@@ -165,7 +168,15 @@
                 this.montar(dt, t1, it);
                 const A = this.A, b = this.b;
                 if (!resolver(A, b, n)) throw new Error('Circuito sem solução: verifique nós soltos, fontes de tensão em paralelo ou laço de indutores e fontes.');
-                let perto = true;
+                // Newton amortecido (só com MOSFET): o passo inteiro é encolhido para nenhuma tensão mudar mais de 2 V
+                // por iteração. Encolher o vetor todo mantém as equações lineares (fontes, fios) coerentes; portas CMOS divergem sem isso.
+                let limitou = false;
+                if (this.nosMOS) {
+                    let maxd = 0;
+                    for (let i = 0; i < this.nNos - 1; i++) maxd = Math.max(maxd, Math.abs(b[i] - this.x[i]));
+                    if (maxd > 2) { const al = 2 / maxd; for (let i = 0; i < n; i++) b[i] = this.x[i] + al * (b[i] - this.x[i]); limitou = true; }
+                }
+                let perto = !limitou;
                 for (let i = 0; i < n; i++) {
                     if (!isFinite(b[i])) throw new Error('A simulação divergiu (valor infinito). Reduza o passo de tempo ou revise o circuito.');
                     if (Math.abs(b[i] - this.x[i]) > 1e-6 + 1e-5 * Math.abs(b[i])) perto = false;
@@ -359,7 +370,7 @@
             const gdg = (this.idMOS(e, vd, vg + h, vs) - id) / h;
             const gds = (this.idMOS(e, vd, vg, vs + h) - id) / h - GMIN;
             e.idr = id;
-            this.estampaNL([nd, ng, ns], [id, 0, -id], [[gdd, gdg, gds], [0, 0, 0], [-gdd, -gdg, -gds]], a, b);
+            this.estampaNL([nd, ng, ns], [id, 0, -id], [[gdd, gdg, gds], [0, 0, 0], [-gdd, -gdg, -gds]], a, b, [vd, vg, vs]);
         }
 
         aceitar(dt) {

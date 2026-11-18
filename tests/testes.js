@@ -449,6 +449,42 @@ teste('Arduino Uno emulado: o .hex pisca o D13 a cada ~0,26 s', () => {
     perto(trocas[2] - trocas[1], 0.258, 0.01, 'meio período');
 });
 
+
+// ---------------------------------------------------------------- importar do Falstad
+const IF = require('../js/importar-falstad.js');
+const TXT_FALSTAD = `$ 1 0.000005 10.2 50 5 43
+v 128 368 128 112 0 0 40 5 0 0 0.5
+r 128 112 288 112 0 1000
+r 288 112 288 368 0 1000
+w 128 368 288 368 0
+g 128 368 128 400 0
+t 400 240 448 240 0 1 -4.5 0.6 100
+R 448 224 448 112 0 0 40 9 0 0 0.5
+r 448 256 448 368 0 470
+w 400 240 400 112 0
+w 400 112 288 112 0
+w 448 368 288 368 0
+o 2 64 0 4099 5 0.05 0 2 2 3`;
+
+teste('Importar do Falstad: divisor e transistor com pinos no lugar certo', () => {
+    const r = IF.importar(TXT_FALSTAD);
+    ok(r.dt === 5e-6, 'passo');
+    const net = Circuito.construir(r.els, lib()), m = new Motor(net);
+    rodar(m, 5e-6, 1e-4);
+    const R2 = r.els.find((e) => e.tipo === 'resistor' && e.p[0][0] === 288 && e.p[1][1] === 368);
+    perto(m.v(net.pinos[R2.id][0]), 2.5, 0.05, 'divisor');
+    const q = r.els.find((e) => e.tipo === 'npn');
+    // base no meio do divisor (2,5 V), emissor ~1,85 V com 470 Ω, coletor no trilho de 9 V
+    perto(m.v(net.pinos[q.id][1]), 2.5, 0.05, 'base'); perto(m.v(net.pinos[q.id][0]), 9, 0.01, 'coletor');
+    ok(m.v(net.pinos[q.id][2]) > 1.6 && m.v(net.pinos[q.id][2]) < 2.0, 'emissor ' + m.v(net.pinos[q.id][2]));
+});
+
+teste('Importar do Falstad por link (?ctz= comprimido)', () => {
+    require('vm').runInThisContext(require('fs').readFileSync(require('path').join(__dirname, '../vendor/lz-string/lz-string.min.js'), 'utf8'));
+    const link = 'https://www.falstad.com/circuit/circuitjs.html?ctz=' + globalThis.LZString.compressToEncodedURIComponent(TXT_FALSTAD);
+    ok(IF.importar(link).els.length === IF.importar(TXT_FALSTAD).els.length);
+});
+
 // ---------------------------------------------------------------- exemplos
 function simularExemplo(id, T, chaveFechada) {
     const ex = EXEMPLOS.find((e) => e.id === id);

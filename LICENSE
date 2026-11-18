@@ -10,7 +10,8 @@ O código deste simulador foi escrito do zero. A interação se inspira no simul
 (falstad.com/circuit, github.com/pfalstad/circuitjs1, licença GPL), mas nenhum código dele foi copiado.
 
 Componentes de terceiros incluídos na pasta vendor/, cada um com a sua licença ao lado (LICENSE.txt):
-JSCPP com lodash, pegjs-util e printf (MIT), avr8js (MIT) e eecircuit-engine (MIT) com o ngspice (BSD modificada).
+JSCPP com lodash, pegjs-util e printf (MIT), avr8js (MIT), eecircuit-engine (MIT) com o ngspice (BSD modificada) e lz-string (MIT).
+O importador lê o formato público de texto do simulador do Falstad; nenhum código dele foi copiado.
 
 Modelos SPICE de fabricantes que o usuário puser na pasta de modelos continuam sob os termos de cada fabricante.
 

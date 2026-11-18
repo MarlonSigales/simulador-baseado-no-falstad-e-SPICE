@@ -35,7 +35,10 @@
         const avisos = [];
         let ref = 'GND';
         const temTerra = elementos.some((el) => C.DEFS[el.tipo] && C.DEFS[el.tipo].terra);
-        if (!temTerra) {
+        // trilhos, portas lógicas, amp-op e microcontroladores já se referem ao terra (como no Falstad): não inventa referência
+        const IMPLICITA = /^(trilho|entradaLogica|porta_|ampop|mcu|arduino)/;
+        const terraImplicita = elementos.some((el) => IMPLICITA.test(el.tipo));
+        if (!temTerra && !terraImplicita) {
             const f = elementos.find((el) => el.tipo === 'fonteV') || elementos.find((el) => pinos[el.id] && pinos[el.id].length);
             if (f) { juntar(pinos[f.id][0], 'GND'); avisos.push(`Sem terra no circuito: o ${f.tipo === 'fonteV' ? 'terminal − de' : 'primeiro pino de'} ${f.id} foi usado como referência (0 V).`); }
         }

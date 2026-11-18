@@ -30,7 +30,8 @@ HTML, CSS e JavaScript puros, sem servidor e sem bibliotecas externas.
   tipo, arquivo ou pino; botão "Usar" aplica o modelo no componente selecionado ou cria um novo.
 - **Caixa SPICE:** componente sem modelo vira uma caixa com pinos nomeados; ao escolher o `.subckt`, os pinos passam a ser os do modelo.
 - **Netlist SPICE (.cir)** para rodar no ngspice ou LTspice, com os modelos e subcircuitos usados.
-- Salvar e abrir circuitos (.json); o circuito e a biblioteca ficam guardados no navegador.
+- **Importar do Falstad:** cole o texto (File → Export As Text) ou o link do circuito; abrir este app com `?ctz=...` também importa.
+- Salvar e abrir circuitos (.json); o circuito e a biblioteca ficam guardados no navegador; a pasta de modelos é lembrada (Chrome/Edge).
 
 - **Microcontrolador** (tecla `u`): firmware em C no estilo Arduino (setup/loop, digitalWrite, analogRead, PWM, delay, printf)
   rodando junto com o tempo simulado, com editor e monitor serial; e **Arduino Uno emulado** (ATmega328P) rodando o .hex do Arduino IDE.
@@ -48,7 +49,7 @@ Para modelos só seus, sem publicar: botão **📁 Abrir pasta de modelos** no p
 
 ## Testes
 
-`node tests/testes.js` (54 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
+`node tests/testes.js` (56 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
 
 ## Arquivos
 
@@ -67,8 +68,9 @@ js/app.js                controles, osciloscópio, propriedades, biblioteca, arq
 js/mcu.js                microcontrolador (firmware C e Arduino Uno emulado)
 js/analises.js           análises no ngspice (netlist, resultados, Fourier, Monte Carlo, gráficos)
 js/analises-ui.js        janela das análises
+js/importar-falstad.js   importa circuitos do Falstad (texto ou link)
 js/exemplos.js           circuitos de exemplo
-vendor/                  JSCPP, avr8js e eecircuit-engine/ngspice, com as licenças
+vendor/                  JSCPP, avr8js, eecircuit-engine/ngspice e lz-string, com as licenças
 js/modelos-embutidos.js  cópia de modelos/*.lib (para abrir do disco)
 modelos/                 pasta de modelos SPICE (+ indice.json)
 tests/                   testes e gerador dos modelos embutidos

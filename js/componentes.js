@@ -17,8 +17,8 @@
         LED: { nome: 'LED_PADRAO', tipo: 'D', params: { IS: 1e-20, N: 1.5, RS: 2 } },
         NPN: { nome: 'NPN_PADRAO', tipo: 'NPN', params: { IS: 1e-14, BF: 100, BR: 1 } },
         PNP: { nome: 'PNP_PADRAO', tipo: 'PNP', params: { IS: 1e-14, BF: 100, BR: 1 } },
-        NMOS: { nome: 'NMOS_PADRAO', tipo: 'NMOS', params: { VTO: 1.5, KP: 0.02 } },
-        PMOS: { nome: 'PMOS_PADRAO', tipo: 'PMOS', params: { VTO: -1.5, KP: 0.02 } },
+        NMOS: { nome: 'NMOS_PADRAO', tipo: 'NMOS', params: { VTO: 1.5, KP: 0.02, LAMBDA: 0.01 } },
+        PMOS: { nome: 'PMOS_PADRAO', tipo: 'PMOS', params: { VTO: -1.5, KP: 0.02, LAMBDA: 0.01 } },
         ZENER: { nome: 'ZENER_PADRAO', tipo: 'D', params: { IS: 1e-14, N: 1, BV: 5.6, IBV: 5e-3 } }
     };
 

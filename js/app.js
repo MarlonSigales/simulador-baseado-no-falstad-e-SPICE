@@ -45,6 +45,9 @@
             if (salvo && Array.isArray(salvo.els) && salvo.els.length) this.abrirDados(salvo, true);
             else this.abrirExemplo('rc');
             this.ligarTeclas();
+            this.reabrirPasta(false);
+            // link no estilo do Falstad: ...index.html?ctz=... ou ?cct=... abre o circuito direto
+            if (/[?&](ctz|cct)=/.test(location.search)) setTimeout(() => this.importarFalstad(location.href), 50);
             this.ligarMenuMovel();
             let ant = performance.now();
             const quadro = (agora) => {
@@ -406,6 +409,7 @@
                 if (t) { this.osc.splice(+t.dataset.tirarOsc, 1); this.listarOsc(); }
             });
             $('#abrir-json').addEventListener('change', (ev) => this.abrirArquivoCircuito(ev.target));
+            $('#fal-arquivo').addEventListener('change', (ev) => { const f = ev.target.files[0]; ev.target.value = ''; if (f) f.text().then((t) => { $('#fal-texto').value = t; this.importarFalstad(t); }); });
             $('#abrir-hex').addEventListener('change', (ev) => {
                 const f = ev.target.files[0], el = this.ed.selecionado(); ev.target.value = '';
                 if (!f || !el) return;
@@ -431,6 +435,10 @@
                 case 'zoom-mais': this.ed.zoom(1.25); break;
                 case 'zoom-menos': this.ed.zoom(0.8); break;
                 case 'centralizar': this.enquadrar(); break;
+                case 'importar-falstad': $('#fal-msg').textContent = ''; $('#dlg-falstad').showModal(); document.body.classList.remove('sidebar-aberta'); break;
+                case 'falstad-fechar': $('#dlg-falstad').close(); break;
+                case 'falstad-arquivo': $('#fal-arquivo').click(); break;
+                case 'falstad-importar': this.importarFalstad($('#fal-texto').value); break;
                 case 'analises': if (window.AnalisesUI) window.AnalisesUI.abrir(); break;
                 case 'editar-firmware': if (sel) this.abrirFirmware(sel); break;
                 case 'firmware-carregar': this.carregarFirmware(); break;
@@ -462,7 +470,8 @@
                 case 'osc-apagar': this.limparOsc(); break;
                 case 'osc-congelar': this.oscCongelado = !this.oscCongelado; alvo.textContent = this.oscCongelado ? '▶ Continuar' : '❄ Congelar'; break;
                 case 'osc-p': if (sel) this.adicionarOsc(sel, 'P'); break;
-                case 'bib-pasta': $('#bib-pasta').click(); break;
+                case 'bib-pasta': if (window.showDirectoryPicker) this.escolherPasta(); else $('#bib-pasta').click(); break;
+                case 'bib-reabrir': this.reabrirPasta(true); break;
                 case 'bib-arquivos': $('#bib-arquivos').click(); break;
                 case 'bib-colar': this.colarModelo(); break;
                 case 'bib-usar': this.usarDaBiblioteca(alvo.dataset.classe, alvo.dataset.nome); break;
@@ -651,6 +660,42 @@
             $('#bib-busca').addEventListener('input', () => this.listarBiblioteca());
             this.listarBiblioteca();
         },
+        // pasta de modelos lembrada entre as sessões (File System Access API: Chrome e Edge); nos outros, a seleção comum
+        idb(modo, f) {
+            return new Promise((ok, falha) => {
+                const r = indexedDB.open('simfs', 1);
+                r.onupgradeneeded = () => r.result.createObjectStore('kv');
+                r.onerror = () => falha(r.error);
+                r.onsuccess = () => { const tx = r.result.transaction('kv', modo); const q = f(tx.objectStore('kv')); tx.oncomplete = () => ok(q && q.result); tx.onerror = () => falha(tx.error); };
+            });
+        },
+        async escolherPasta() {
+            try {
+                const h = await window.showDirectoryPicker({ id: 'modelos-spice', mode: 'read' });
+                await this.idb('readwrite', (s) => s.put(h, 'pasta'));
+                await this.lerPasta(h);
+            } catch (e) { if (e.name !== 'AbortError') this.aviso('Não consegui abrir a pasta: ' + e.message); }
+        },
+        async reabrirPasta(pedir) {
+            try {
+                const h = await this.idb('readonly', (s) => s.get('pasta'));
+                if (!h) return;
+                let p = await h.queryPermission({ mode: 'read' });
+                if (p !== 'granted' && pedir) p = await h.requestPermission({ mode: 'read' });
+                if (p === 'granted') { $('#bib-reabrir').hidden = true; await this.lerPasta(h); }
+                else { const b = $('#bib-reabrir'); b.hidden = false; b.textContent = `↻ Reabrir a pasta “${h.name}”`; }
+            } catch (e) { /* sem suporte ou sem pasta guardada */ }
+        },
+        async lerPasta(h) {
+            const arqs = [];
+            const andar = async (d, cam) => { for await (const [nome, x] of d.entries()) { if (x.kind === 'directory') await andar(x, cam + nome + '/'); else if (this.lib.aceitaArquivo(nome)) arqs.push([cam + nome, x]); } };
+            await andar(h, h.name + '/');
+            let m = 0, s = 0;
+            for (const [cam, x] of arqs) { const r = this.lib.adicionar(cam, await (await x.getFile()).text(), 'pasta'); m += r.modelos; s += r.subckts; }
+            this.listarBiblioteca(); this.reconstruir();
+            this.aviso(`Pasta “${h.name}”: ${arqs.length} arquivo(s), ${m} modelos e ${s} subcircuitos.`);
+        },
+
         listarBiblioteca() {
             const tt = this.lib.totais();
             $('#bib-totais').textContent = `${tt.modelos} modelos · ${tt.subckts} subcircuitos · ${tt.arquivos} arquivo(s)`;
@@ -694,6 +739,19 @@
             const el = C.DEFS[tipoEl[0]].bipolo ? this.novo(tipoEl[0], { p: [c, [c[0] + 64, c[1]]] }) : this.novo(tipoEl[0], { pos: c, rot: 0 });
             el.props.modelo = nome;
             this.ed.selecionarSo(el); this.selecionou(el); this.mudouTopologia();
+        },
+
+        importarFalstad(txt) {
+            const msg = $('#fal-msg');
+            try {
+                if (!txt.trim()) throw new Error('Cole o texto ou o link do circuito.');
+                const r = window.ImportarFalstad.importar(txt);
+                if (!r.els.length) throw new Error('Não achei componentes no texto (ele começa com "$ "?).');
+                this.antes();
+                this.abrirDados({ els: r.els, dt: r.dt || this.dt, velocidade: this.velocidade, osc: [] });
+                $('#dlg-falstad').close();
+                this.aviso(`${r.els.length} elementos importados.` + (r.avisos.length ? ' ' + r.avisos.join(' · ') : ''));
+            } catch (e) { msg.textContent = '⚠ ' + e.message; msg.className = 'fw-msg erro'; if (!$('#dlg-falstad').open) this.aviso('Link do Falstad: ' + e.message); }
         },
 
         // ------------------------------------------------------------ microcontrolador
