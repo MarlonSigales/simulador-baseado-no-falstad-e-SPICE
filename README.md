@@ -22,7 +22,8 @@ HTML, CSS e JavaScript puros, sem servidor e sem bibliotecas externas.
   tempo ajustável, pausar, avançar um passo e reiniciar.
 - **Osciloscópio** com até 4 traços (tensão, corrente ou potência), tempo/div, disparo, escala e posição por traço, congelar e medidas (pp, média, RMS, frequência).
 - **Componentes:** fio, resistor, capacitor, indutor, chave, fonte de tensão (contínua, senoidal, quadrada), trilho +V, fonte de
-  corrente, terra, diodo, zener, LED (acende com a corrente), NPN, PNP, MOSFET N e P, amp-op ideal, Caixa SPICE (amp-op com o triângulo da bibliografia) e voltímetro.
+  corrente, terra, diodo, zener, LED (acende com a corrente), potenciômetro, eletrolítico, chave de 2 posições, transformador,
+  lâmpada, relé, amperímetro, portas lógicas, entrada/saída lógica, rótulo de nó, texto, fonte PWL, NPN, PNP, MOSFET N e P, amp-op ideal, Caixa SPICE (amp-op com o triângulo da bibliografia) e voltímetro.
 - **Modelos SPICE de verdade no tempo real:** diodo (IS, N, RS, BV, IBV), BJT (IS, BF, BR, NF, NR, VAF), MOSFET nível 1
   (VTO, KP, LAMBDA) e subcircuitos com R, C, L, V, I, E, G, F, H, D, Q, M e X.
 - **Biblioteca SPICE pesquisável:** abra uma pasta de modelos (lê as subpastas), arquivos soltos ou cole o texto; busca por nome,
@@ -44,7 +45,7 @@ Para modelos só seus, sem publicar: botão **📁 Abrir pasta de modelos** no p
 
 ## Testes
 
-`node tests/testes.js` (38 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
+`node tests/testes.js` (46 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
 
 ## Arquivos
 
@@ -55,6 +56,7 @@ css/simulador.css        área do simulador
 js/spice.js              valores SPICE, leitura de .model/.subckt, expansão de subcircuitos
 js/motor.js              motor em tempo real (MNA, trapezoidal, Newton)
 js/componentes.js        catálogo de componentes (desenho, pinos, primitivos, linha SPICE)
+js/componentes-extra.js  mais componentes (potenciômetro, transformador, relé, lógica...)
 js/circuito.js           desenho → nós → primitivos; exportação do netlist
 js/biblioteca.js         biblioteca de modelos e busca
 js/editor.js             editor no canvas

@@ -30,6 +30,7 @@
             const ps = C.pinos(el, lib);
             pinos[el.id] = ps.map((p) => ver(chave(p)));
             if (d.terra) juntar(pinos[el.id][0], 'GND');
+            if (d.rotuloNo && pinos[el.id].length) { const nome = d.rotuloNo(el); if (nome) juntar(pinos[el.id][0], nome === 'GND' || nome === '0' ? 'GND' : ver('LBL:' + nome)); }
         });
         const avisos = [];
         let ref = 'GND';
@@ -54,7 +55,7 @@
     function construir(elementos, lib) {
         const r = nos(elementos, lib);
         let nNos = r.nNos;
-        const prims = [], avisos = r.avisos.slice(), primDe = {}, correnteDe = {};
+        const prims = [], avisos = r.avisos.slice(), primDe = {}, correnteDe = {}, papeis = {};
         const internos = {};
         const buscarModelo = (nome, locais) => {
             if (!nome) return null;
@@ -75,6 +76,7 @@
                     p.nome = p.nome || (el.id + (primeiro ? '' : '.' + prims.length));
                     if (primeiro) primDe[el.id] = p.nome;
                     if (op && op.corrente) (correnteDe[el.id] = correnteDe[el.id] || []).push(p.nome); // somam na corrente do terminal
+                    if (op && op.papel) (papeis[el.id] = papeis[el.id] || {})[op.papel] = p.nome;
                     primeiro = false; p.dono = el.id; prims.push(p);
                 },
                 novoNo: (suf) => { const k = el.id + '#' + suf; if (internos[k] === undefined) internos[k] = nNos++; return internos[k]; },
@@ -125,7 +127,7 @@
                 cap(p, p.nos[1], p.nos[0], m.CGD ?? (m.CGDO ? m.CGDO * W : 0), 'CGD');
             }
         });
-        return { nNos, prims, pinos: r.pinos, primDe, correnteDe, avisos: [...new Set(avisos)] };
+        return { nNos, prims, pinos: r.pinos, primDe, correnteDe, papeis, avisos: [...new Set(avisos)] };
     }
 
     /** Netlist SPICE (.cir) para rodar no ngspice/LTspice. */

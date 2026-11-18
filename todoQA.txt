@@ -42,13 +42,16 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 11 [fazer] Microcontrolador, modo B: emulação do ATmega328P (avr8js, MIT) rodando .hex do Arduino; depois RP2040 (rp2040js).
 12 [fazer] ngspice em WebAssembly (vendor/, Web Worker): .op sobre o desenho, Bode (.ac), curva DC, ruído, Fourier/THD, .step, temperatura, Monte Carlo.
 13 [resolvido 18/11/2026] Capacitâncias de junção (CJO, CJE, CJC) e resistências série no tempo real, como capacitores lineares (falta a dependência com a tensão e TT).
-14 [fazer] Mais componentes: potenciômetro, transformador, lâmpada, relé, portas lógicas, fonte PWL, amperímetro.
+14 [resolvido 18/11/2026] Mais componentes (js/componentes-extra.js): potenciômetro (roda do mouse gira o cursor), eletrolítico (C), chave de 2 posições (S),
+   transformador com Lp, relação, k e resistências (T), lâmpada com filamento aquecendo, relé com bobina e contatos NA/NF (R), amperímetro,
+   portas NÃO/E/NÃO-E/OU/NÃO-OU/XOR/XNOR (1 2 @ 3 # 4 $), entrada lógica (i), saída lógica (o), rótulo de nó (b), texto (t) e fonte PWL.
+   Teclas iguais às do Falstad; o Shift+R de girar saiu porque R é o relé no Falstad (girar fica no botão).
 15 [futuro] Abrir pasta com a File System Access API (lembrar a pasta entre sessões) e pasta de modelos na nuvem MEGA da equipe.
 16 [futuro] Importar o formato de texto do Falstad (circuitjs) para reaproveitar circuitos prontos.
 17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
 
 === QA (18/11/2026)
-- node tests/testes.js: 38 de 38 passaram (não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- node tests/testes.js: 46 de 46 passaram (potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
 - Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
   "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

@@ -106,7 +106,7 @@
     /** Dá ids no estilo do SPICE (R1, C1, ...) a uma lista de elementos sem id. */
     function comIds(els) {
         const cont = {};
-        const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' };
+        const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', potenciometro: 'P', eletrolitico: 'C', chave2: 'S', transformador: 'T', lampada: 'LP', rele: 'K', amperimetro: 'AM', entradaLogica: 'IN', saidaLogica: 'OUT', rotuloNo: 'LBL', texto: 'TXT', porta_not: 'U', porta_and: 'U', porta_nand: 'U', porta_or: 'U', porta_nor: 'U', porta_xor: 'U', porta_xnor: 'U', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' };
         return els.map((e) => {
             const l = letra[e.tipo] || 'E';
             cont[l] = (cont[l] || 0) + 1;

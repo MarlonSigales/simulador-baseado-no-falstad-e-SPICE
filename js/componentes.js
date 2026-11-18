@@ -84,25 +84,37 @@
         switch (p.forma) {
             case 'seno': return `${fmt(p.amplitude, 'V')} ${fmt(p.freq, 'Hz')}`;
             case 'quadrada': return `⎍ ${fmt(p.amplitude, 'V')} ${fmt(p.freq, 'Hz')}`;
+            case 'pwl': return 'PWL';
             default: return fmt(p.V, 'V');
         }
     };
     const fonteDasProps = (p) => ({
         forma: p.forma || 'dc', dc: S.valor(p.V), amplitude: S.valor(p.amplitude), freq: S.valor(p.freq),
-        offset: S.valor(p.offset) || 0, fase: S.valor(p.fase) || 0, duty: isNaN(S.valor(p.duty)) ? 0.5 : S.valor(p.duty)
+        offset: S.valor(p.offset) || 0, fase: S.valor(p.fase) || 0, duty: isNaN(S.valor(p.duty)) ? 0.5 : S.valor(p.duty),
+        pwl: lerPWL(p.pontos), repetir: !!p.repetir
     });
+    /** "0 0, 1m 5, 2m 0" → [[0,0],[0.001,5],[0.002,0]] (pares tempo valor, em ordem de tempo) */
+    function lerPWL(txt) {
+        const v = String(txt || '').split(/[\s,;()]+/).filter(Boolean).map(S.valor).filter((x) => !isNaN(x));
+        const pts = [];
+        for (let i = 0; i + 1 < v.length; i += 2) pts.push([v[i], v[i + 1]]);
+        return pts.sort((a, b) => a[0] - b[0]);
+    }
     const spiceFonte = (p) => {
         const f = fonteDasProps(p);
         if (f.forma === 'seno') return `SIN(${f.offset} ${f.amplitude} ${f.freq} 0 0 ${f.fase})`;
         if (f.forma === 'quadrada') { const per = 1 / f.freq; return `PULSE(${f.offset - f.amplitude} ${f.offset + f.amplitude} 0 1n 1n ${per * f.duty} ${per})`; }
+        if (f.forma === 'pwl') return `PWL(${f.pwl.map(([t, v]) => `${t} ${v}`).join(' ')})${f.repetir ? ' r=0' : ''}`;
         return `DC ${f.dc}`;
     };
     const CAMPOS_FONTE = [
-        { k: 'forma', r: 'Forma de onda', tipo: 'sel', op: [['dc', 'Contínua (DC)'], ['seno', 'Senoidal'], ['quadrada', 'Quadrada']] },
+        { k: 'forma', r: 'Forma de onda', tipo: 'sel', op: [['dc', 'Contínua (DC)'], ['seno', 'Senoidal'], ['quadrada', 'Quadrada'], ['pwl', 'Por pontos (PWL)']] },
         { k: 'V', r: 'Tensão', u: 'V', se: (p) => p.forma === 'dc' },
-        { k: 'amplitude', r: 'Amplitude (pico)', u: 'V', se: (p) => p.forma !== 'dc' },
-        { k: 'freq', r: 'Frequência', u: 'Hz', se: (p) => p.forma !== 'dc' },
-        { k: 'offset', r: 'Nível médio (offset)', u: 'V', se: (p) => p.forma !== 'dc' },
+        { k: 'pontos', r: 'Pontos: tempo valor, tempo valor…', texto: true, dica: 'ex.: 0 0, 1m 5, 2m 5, 3m 0', se: (p) => p.forma === 'pwl' },
+        { k: 'repetir', r: 'Repetir', tipo: 'bool', se: (p) => p.forma === 'pwl' },
+        { k: 'amplitude', r: 'Amplitude (pico)', u: 'V', se: (p) => p.forma !== 'dc' && p.forma !== 'pwl' },
+        { k: 'freq', r: 'Frequência', u: 'Hz', se: (p) => p.forma !== 'dc' && p.forma !== 'pwl' },
+        { k: 'offset', r: 'Nível médio (offset)', u: 'V', se: (p) => p.forma !== 'dc' && p.forma !== 'pwl' },
         { k: 'fase', r: 'Fase', u: '°', se: (p) => p.forma === 'seno' },
         { k: 'duty', r: 'Ciclo de trabalho (0–1)', se: (p) => p.forma === 'quadrada' }
     ];
@@ -251,7 +263,7 @@
         },
         fonteV: {
             icone: 'V', nome: 'Fonte de tensão', grupo: 'fontes', bipolo: true, tecla: 'v', tensaoInvertida: true,
-            props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5' },
+            props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5', pontos: '0 0, 1m 5, 2m 5, 3m 0', repetir: true },
             campos: CAMPOS_FONTE.concat([NI('Rint', 'Resistência interna (série)', 'Ω', '0 = ideal')]),
             texto: (el) => textoFonte(el.props),
             desenhar(g, el, info) {
@@ -282,7 +294,7 @@
         },
         trilho: {
             icone: '+', nome: 'Trilho de tensão (+V)', curto: 'Trilho +V', grupo: 'fontes', bipolo: false, tecla: 'V',
-            props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5' },
+            props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5', pontos: '0 0, 1m 5, 2m 5, 3m 0', repetir: true },
             campos: CAMPOS_FONTE.concat([NI('Rint', 'Resistência interna (série)', 'Ω', '0 = ideal')]),
             pinos: (el) => pinosPorOffsets(el, [[0, 0]]),
             caixa: (el) => caixaGirada(el, -24, -36, 48, 36),
@@ -661,10 +673,14 @@
         { id: 'instrumentos', nome: 'Instrumentos' }
     ];
 
+    // componentes extras (componentes-extra.js): registram-se aqui com os mesmos auxiliares
+    const extra = (typeof module !== 'undefined' && module.exports) ? require('./componentes-extra.js') : raiz.ComponentesExtra;
+    if (extra) extra({ DEFS, GRUPOS, S, GRADE, bipolo, linha, terminal, rotulo, comGiro, caixaGirada, pinosPorOffsets, num, NI, rede, nm, fmt, triangulo, RMIN, ativoInf });
+
     /** Pinos de qualquer elemento (bipolo: as duas pontas). */
     function pinos(el, lib) {
         const d = DEFS[el.tipo];
-        return d.bipolo ? el.p : d.pinos.call(d, el, lib);
+        return d.bipolo ? el.p : d.pinos ? d.pinos.call(d, el, lib) : [];
     }
 
     const API = { DEFS, GRUPOS, GRADE, MODELOS_PADRAO, CORES_LED, LED_COR, RMIN, pinos, girar, rotulo, caixaGirada, num, lerAjustes, comAjustes };

@@ -78,7 +78,7 @@
 
         // ------------------------------------------------------------ circuito
         novoId(tipo) {
-            const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' }[tipo] || 'E';
+            const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', potenciometro: 'P', eletrolitico: 'C', chave2: 'S', transformador: 'T', lampada: 'LP', rele: 'K', amperimetro: 'AM', entradaLogica: 'IN', saidaLogica: 'OUT', rotuloNo: 'LBL', texto: 'TXT', porta_not: 'U', porta_and: 'U', porta_nand: 'U', porta_or: 'U', porta_nor: 'U', porta_xor: 'U', porta_xnor: 'U', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' }[tipo] || 'E';
             let n = 1;
             const usados = new Set(this.ed.els.map((e) => e.id));
             while (usados.has(letra + n)) n++;
@@ -144,7 +144,10 @@
             const soma = this.net.correnteDe && this.net.correnteDe[el.id];
             if (soma) soma.forEach((nm) => { const q = this.motor.prim(nm); if (q) i += q.i; }); // série + paralelos = corrente no terminal
             else if (p) i = p.i;
-            return { v, i, cor: vazio.cor, prim: p };
+            const pp = this.net.papeis && this.net.papeis[el.id];
+            const prims = {};
+            if (pp) Object.entries(pp).forEach(([k, nm]) => { prims[k] = this.motor.prim(nm); });
+            return { v, i, cor: vazio.cor, prim: p, prims };
         },
         /**
          * Tensão de um bipolo como no Falstad: v(p0) − v(p1), de modo que V·I > 0 = potência consumida.
@@ -507,6 +510,7 @@
             const html = (c) => {
                 const id = `campo-${c.k}`;
                 const v = el.props[c.k];
+                if (c.tipo === 'faixa') return `<label class="campo"><span>${esc(c.r)}: <b data-faixa-txt="${c.k}">${Math.round((parseFloat(v) || 0) * 100)} %</b></span><input type="range" min="0" max="1" step="0.01" id="${id}" data-faixa="${c.k}" value="${esc(v)}"></label>`;
                 if (c.tipo === 'bool') return `<label class="campo campo-bool"><input type="checkbox" id="${id}" data-campo="${c.k}" ${v ? 'checked' : ''}> ${esc(c.r)}</label>`;
                 if (c.tipo === 'sel') return `<label class="campo"><span>${esc(c.r)}</span><select id="${id}" data-campo="${c.k}">${c.op.map(([o, t]) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
                 if (c.tipo === 'modelo') {
@@ -527,7 +531,7 @@
                 return `<label class="campo"><span>${esc(c.r)}${c.u ? ` <small>(${esc(c.u)})</small>` : ''}</span><input type="text" id="${id}" data-campo="${c.k}" value="${esc(v)}" spellcheck="false"${c.dica ? ` placeholder="${esc(c.dica)}" title="${esc(c.dica)}"` : ''}></label>${c.dica && c.ni ? `<small class="dica-campo">${esc(c.dica)}</small>` : ''}`;
             };
             // não idealidades ficam num bloco à parte; abre sozinho quando alguma estiver em uso
-            const ideal = (c) => { const v = String(el.props[c.k] ?? '').trim(); return c.texto ? !v : (v === '' || v === '0' || C.num(v) === 0 || C.num(v) === Infinity); };
+            const ideal = (c) => { const v = String(el.props[c.k] ?? '').trim(); if (c.ideal !== undefined) return C.num(v) === C.num(c.ideal); return c.texto ? !v : (v === '' || v === '0' || C.num(v) === 0 || C.num(v) === Infinity); };
             const ni = campos.filter((c) => c.ni), emUso = ni.filter((c) => !ideal(c)).length;
             const linhas = campos.filter((c) => !c.ni).map(html).join('') + (ni.length ? `<details class="nao-ideal"${emUso ? ' open' : ''}>
                 <summary>Não idealidades ${emUso ? `<span class="etiqueta">${emUso} em uso</span>` : '<small>(todas ideais)</small>'}</summary>
@@ -546,13 +550,23 @@
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="girar" title="Shift+R">⟳ ${d.bipolo ? 'Inverter' : 'Girar'}</button>
                     <button type="button" class="btn btn-secondary btn-sm btn-perigo" data-acao="excluir" title="Delete">🗑 Excluir</button>
                 </div>`;
+            box.querySelectorAll('[data-faixa]').forEach((inp) => {
+                let marcado = false;
+                inp.addEventListener('input', () => {
+                    if (!marcado) { this.antes(); marcado = true; }
+                    el.props[inp.dataset.faixa] = inp.value;
+                    box.querySelector(`[data-faixa-txt="${inp.dataset.faixa}"]`).textContent = Math.round(inp.value * 100) + ' %';
+                    this.reconstruir(); this.guardar();
+                });
+                inp.addEventListener('change', () => { marcado = false; });
+            });
             box.querySelectorAll('[data-campo]').forEach((inp) => {
                 inp.addEventListener('change', () => {
                     this.antes();
                     const k = inp.dataset.campo;
                     const c = campos.find((x) => x.k === k);
                     let val = inp.type === 'checkbox' ? inp.checked : inp.value.trim();
-                    if (inp.type === 'text' && !['pinos', 'titulo'].includes(k) && !(c && c.texto) && isNaN(c && c.ni ? C.num(val) : S.valor(val))) { this.aviso(`Valor inválido em ${c.r}: use número com sufixo SPICE (ex.: 4.7k, 10u, 1meg)${c.ni ? ' ou ∞' : ''}.`); inp.value = el.props[k]; return; }
+                    if (inp.type === 'text' && !['pinos', 'titulo', 'pontos'].includes(k) && !(c && c.texto) && isNaN(c && c.ni ? C.num(val) : S.valor(val))) { this.aviso(`Valor inválido em ${c.r}: use número com sufixo SPICE (ex.: 4.7k, 10u, 1meg)${c.ni ? ' ou ∞' : ''}.`); inp.value = el.props[k]; return; }
                     el.props[k] = val;
                     this.mudouValor(el);
                 });
@@ -723,7 +737,6 @@
                 if (k === '0') { this.ed.zoom(1 / this.ed.vista.z); return; }
                 if (k === '/') { ev.preventDefault(); $('#bib-busca').focus(); return; }
                 if (k === 'f') { this.enquadrar(); return; }
-                if (k === 'R' && ev.shiftKey) { this.acao('girar'); return; }
                 const t = Object.entries(C.DEFS).find(([, d]) => d.tecla === k); // diferencia maiúscula: l = LED, L = indutor
                 if (t) this.escolherFerramenta(t[0]);
             });

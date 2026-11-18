@@ -34,6 +34,16 @@
                 const fr = ((t % per) + per) % per / per;
                 return (f.offset || 0) + (fr < (f.duty ?? 0.5) ? f.amplitude : -f.amplitude);
             }
+            case 'pwl': {
+                const p = f.pwl || [];
+                if (!p.length) return 0;
+                let tt = t;
+                const fim = p[p.length - 1][0];
+                if (f.repetir && fim > 0) tt = t % fim;
+                if (tt <= p[0][0]) return p[0][1];
+                for (let i = 1; i < p.length; i++) if (tt <= p[i][0]) { const [t0, v0] = p[i - 1], [t1, v1] = p[i]; return t1 > t0 ? v0 + (v1 - v0) * (tt - t0) / (t1 - t0) : v1; }
+                return p[p.length - 1][1];
+            }
             case 'pulso': {
                 if (t < f.td) return f.v1;
                 const tt = (t - f.td) % f.per;
@@ -99,7 +109,16 @@
             this.naoLineares = false;
             this.prims.forEach((p) => {
                 porNome[p.nome] = p;
-                if (['V', 'E', 'H', 'OP'].includes(p.tipo)) p.ramo = ramo++;
+                if (['V', 'E', 'H', 'OP', 'VD'].includes(p.tipo)) p.ramo = ramo++;
+                if (p.tipo === 'K2') {
+                    // indutores acoplados: Γ = inversa de [[L1, M], [M, L2]]
+                    const det = p.L1 * p.L2 - p.M * p.M;
+                    p.gam = [[p.L2 / det, -p.M / det], [-p.M / det, p.L1 / det]];
+                    const e = estadoAnterior && estadoAnterior[p.nome];
+                    p.ant = e ? e.ant : { v1: 0, v2: 0, i1: 0, i2: 0 };
+                }
+                if (p.tipo === 'LAMP') { const e = estadoAnterior && estadoAnterior[p.nome]; p.teta = e ? e.teta : 0; }
+                if (p.tipo === 'VD' && p.saida === undefined) p.saida = 0;
                 if (p.tipo === 'D') { p.m = modeloCom(PADRAO.D, p.modelo); p.vd = 0; this.naoLineares = true; }
                 if (p.tipo === 'Q') { p.m = modeloCom(PADRAO.Q, p.modelo); p.pol = p.modelo && p.modelo.tipo === 'PNP' ? -1 : (p.pol || 1); p.vbe = 0; p.vbc = 0; this.naoLineares = true; }
                 if (p.tipo === 'M') {
@@ -109,6 +128,8 @@
                     this.naoLineares = true;
                 }
                 if (p.tipo === 'OP' || p.tipo === 'RLIM') this.naoLineares = true;
+                if (p.tipo === 'VD' || p.tipo === 'RELE') this.temDigitais = true;
+                if (p.tipo === 'RELE') { const e = estadoAnterior && estadoAnterior[p.nome]; p.ligado = e ? e.ligado : false; }
                 if (p.tipo === 'C' || p.tipo === 'L') {
                     const e = estadoAnterior && estadoAnterior[p.nome];
                     p.vant = e ? e.v : 0; p.iant = e ? e.i : 0;
@@ -128,6 +149,7 @@
             this.A = new Float64Array(this.n * this.n);
             this.b = new Float64Array(this.n);
             this.porNome = porNome;
+            if (this.temDigitais) this.digitais(); // portas e relés já começam coerentes
         }
 
         v(no) { return no > 0 ? this.x[no - 1] : 0; }
@@ -154,6 +176,7 @@
             if (!convergiu) this.naoConvergiu++;
             this.aceitar(dt, t1);
             this.t = t1;
+            if (this.temDigitais) this.digitais();
             return convergiu;
         }
 
@@ -200,6 +223,26 @@
                         ar(p, k, 1); ar(q, k, -1); ra(k, p, 1); ra(k, q, -1); A[k * n + kc] -= e.valor;
                         break;
                     }
+                    case 'VD': { // fonte digital (portas lógicas, entrada lógica): valor decidido no passo anterior
+                        const k = N + e.ramo;
+                        ar(p, k, 1); ar(q, k, -1); ra(k, p, 1); ra(k, q, -1);
+                        b[k] = e.saida;
+                        break;
+                    }
+                    case 'K2': {
+                        const [p1, p2, s1, s2] = e.nos, h = dt / 2, G = e.gam.map((l) => l.map((x) => x * h));
+                        const a0 = e.ant;
+                        const Ih1 = a0.i1 + G[0][0] * a0.v1 + G[0][1] * a0.v2, Ih2 = a0.i2 + G[1][0] * a0.v1 + G[1][1] * a0.v2;
+                        e.G = G; e.Ih = [Ih1, Ih2];
+                        const port = [[p1, p2], [s1, s2]];
+                        for (let r = 0; r < 2; r++) for (let c2 = 0; c2 < 2; c2++) {
+                            const [ra1, ra2] = port[r], [ca1, ca2] = port[c2], g = G[r][c2];
+                            a(ra1, ca1, g); a(ra1, ca2, -g); a(ra2, ca1, -g); a(ra2, ca2, g);
+                        }
+                        fonteI(p1, p2, Ih1); fonteI(s1, s2, Ih2);
+                        break;
+                    }
+                    case 'LAMP': cond(p, q, 1 / this.rLampada(e)); break;
                     case 'D': this.estampaDiodo(e, iter, cond, fonteI); break;
                     case 'Q': this.estampaBJT(e, iter, a, b); break;
                     case 'M': this.estampaMOS(e, a, b); break;
@@ -325,6 +368,21 @@
                     case 'G': e.i = e.valor * (this.v(e.nos[2]) - this.v(e.nos[3])); break;
                     case 'F': e.i = e.valor * this.x[N + e.ramoRef]; break;
                     case 'D': e.i = e.id; break;
+                    case 'VD': e.i = -this.x[N + e.ramo]; break;
+                    case 'LAMP': {
+                        const R = this.rLampada(e); e.i = v / R;
+                        const P = v * v / R;
+                        // temperatura normalizada do filamento: em regime, teta = P/Pnominal (teta = 1 na potência nominal)
+                        e.teta += (dt / e.tau) * (Math.min(P / e.pnom, 4) - e.teta);
+                        e.brilho = Math.min(1.5, P / e.pnom);
+                        break;
+                    }
+                    case 'K2': {
+                        const [p1, p2, s1, s2] = e.nos, v1 = this.v(p1) - this.v(p2), v2 = this.v(s1) - this.v(s2);
+                        const i1 = e.G[0][0] * v1 + e.G[0][1] * v2 + e.Ih[0], i2 = e.G[1][0] * v1 + e.G[1][1] * v2 + e.Ih[1];
+                        e.ant = { v1, v2, i1, i2 }; e.i = i1; e.i2 = i2;
+                        break;
+                    }
                     case 'Q': e.i = e.ic; break;
                     case 'M': e.i = e.idr; break;
                 }
@@ -336,10 +394,48 @@
             return e.roff > 0 && isFinite(e.roff) ? 1 / e.roff : (e.roff === undefined ? 1e-9 : 0);
         }
 
+        rLampada(e) { return e.rfria + (e.rquente - e.rfria) * Math.max(0, e.teta); }
+
+        /** Depois de cada passo: portas lógicas e relés decidem a saída do próximo passo (como no Falstad). */
+        digitais() {
+            for (const e of this.prims) {
+                if (e.tipo === 'VD' && e.func) {
+                    const lim = e.vdd / 2;
+                    const ent = (e.entradas || []).map((k) => this.v(k) > lim);
+                    let y;
+                    switch (e.func) {
+                        case 'not': y = !ent[0]; break;
+                        case 'and': y = ent.every(Boolean); break;
+                        case 'nand': y = !ent.every(Boolean); break;
+                        case 'or': y = ent.some(Boolean); break;
+                        case 'nor': y = !ent.some(Boolean); break;
+                        case 'xor': y = ent.filter(Boolean).length % 2 === 1; break;
+                        case 'xnor': y = ent.filter(Boolean).length % 2 === 0; break;
+                        case 'ext': y = !!e.alto; break; // entrada lógica / pino de microcontrolador
+                        default: y = false;
+                    }
+                    e.saida = y ? e.vdd : 0;
+                }
+                if (e.tipo === 'RELE') {
+                    const bob = this.porNome[e.bobina];
+                    const i = bob ? Math.abs(bob.i) : 0;
+                    if (!e.ligado && i >= e.ion) e.ligado = true;
+                    else if (e.ligado && i < e.ioff) e.ligado = false;
+                    (e.contatos || []).forEach(([nome, nf]) => { const c = this.porNome[nome]; if (c) c.ligada = nf ? !e.ligado : e.ligado; });
+                }
+            }
+            if (this.aoPasso) this.aoPasso(this);
+        }
+
         /** Estados de C e L por nome, para reaproveitar ao reconstruir o circuito. */
         estados() {
             const s = {};
-            this.prims.forEach((p) => { if (p.tipo === 'C' || p.tipo === 'L') s[p.nome] = { v: p.vant, i: p.iant }; });
+            this.prims.forEach((p) => {
+                if (p.tipo === 'C' || p.tipo === 'L') s[p.nome] = { v: p.vant, i: p.iant };
+                if (p.tipo === 'K2') s[p.nome] = { ant: p.ant };
+                if (p.tipo === 'LAMP') s[p.nome] = { teta: p.teta };
+                if (p.tipo === 'RELE') s[p.nome] = { ligado: p.ligado };
+            });
             return s;
         }
 

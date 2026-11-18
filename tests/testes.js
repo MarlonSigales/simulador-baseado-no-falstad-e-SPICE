@@ -224,7 +224,8 @@ const gnd = { tipo: 'terra', pos: [0, 100], rot: 0, props: {} };
 teste('Padrão de todos os componentes é ideal (0 em série, ∞ em paralelo)', () => {
     Object.entries(Comp.DEFS).forEach(([k, d]) => (d.campos || []).filter((c) => c.ni).forEach((c) => {
         const v = d.props[c.k];
-        ok(c.texto ? v === '' : (Comp.num(v) === 0 || Comp.num(v) === Infinity), `${k}.${c.k} = ${v}`);
+        if (c.ideal !== undefined) ok(Comp.num(v) === Comp.num(c.ideal), `${k}.${c.k} = ${v}`);
+        else ok(c.texto ? v === '' : (Comp.num(v) === 0 || Comp.num(v) === Infinity), `${k}.${c.k} = ${v}`);
     }));
     // circuito ideal: resistor só gera 1 primitivo
     const r = montar([fonte(5), { tipo: 'resistor', p: [[0, 0], [0, 100]], props: { R: '1k' } }, gnd]);
@@ -314,6 +315,90 @@ teste('Netlist inclui as não idealidades', () => {
     ok(/RV1_INT/.test(t) && /RC1_ESR/.test(t) && /RC1_FUGA/.test(t) && /\.model 1N4148_D1 D\(.*RS=2/.test(t), t);
 });
 
+
+// ---------------------------------------------------------------- componentes novos
+teste('Potenciômetro: cursor em 25 % divide 10 V em 7,5 V', () => {
+    const r = montar([fonte(10), { tipo: 'potenciometro', pos: [48, 0], rot: 0, props: { R: '10k', pos: '0.25' } }, { tipo: 'fio', p: [[96, 0], [96, 100]], props: {} }, { tipo: 'fio', p: [[96, 100], [0, 100]], props: {} }, gnd]);
+    r.m.passo(1e-6);
+    perto(r.m.v(r.net.pinos.P1[2]), 7.5, 0.01);
+});
+
+teste('Transformador 1:2 dobra a tensão alternada (com carga)', () => {
+    const els = comIds([
+        { tipo: 'fonteV', p: [[0, 100], [0, 0]], props: { forma: 'seno', amplitude: '10', freq: '60', offset: '0', fase: '0' } },
+        { tipo: 'fio', p: [[0, 0], [68, 0]], props: {} }, { tipo: 'fio', p: [[68, 64], [0, 100]], props: {} },
+        { tipo: 'transformador', pos: [100, 32], rot: 0, props: { Lp: '10', n: '2', k: '1', Rp: '0', Rs: '0' } },
+        { tipo: 'resistor', p: [[132, 0], [132, 64]], props: { R: '10k' } }, gnd, { tipo: 'terra', pos: [132, 64], rot: 0, props: {} }]);
+    const net = Circuito.construir(els, lib()), m = new Motor(net);
+    let mx = 0;
+    for (let i = 0; i < 40000; i++) { m.passo(1e-6); if (i > 20000) mx = Math.max(mx, m.v(net.pinos.T1[2]) - m.v(net.pinos.T1[3])); }
+    perto(mx, 20, 0.5);
+});
+
+teste('Lâmpada: fria tem 1/10 da resistência e esquenta até a nominal', () => {
+    const r = montar([fonte(12), { tipo: 'lampada', p: [[0, 0], [0, 100]], props: { Vn: '12', Pn: '6', tau: '10m' } }, gnd]);
+    r.m.passo(1e-6);
+    const i0 = r.m.prim(r.net.primDe.LP1).i;
+    rodar(r.m, 1e-5, 0.2);
+    const i1 = r.m.prim(r.net.primDe.LP1).i;
+    perto(i0, 5, 0.1, 'corrente de partida'); perto(i1, 0.5, 0.03, 'corrente a quente');
+});
+
+teste('Relé liga com a corrente da bobina e troca o contato', () => {
+    const mk = (V) => {
+        const r = montar([fonte(V), { tipo: 'rele', pos: [100, 48], rot: 0, props: Object.assign({}, Comp.DEFS.rele.props) },
+            { tipo: 'fio', p: [[0, 0], [52, 32]], props: {} }, { tipo: 'fio', p: [[52, 64], [0, 100]], props: {} }, gnd,
+            { tipo: 'trilho', pos: [148, 48], rot: 0, props: { forma: 'dc', V: '5' } },
+            { tipo: 'resistor', p: [[148, 16], [148, 0]], props: { R: '1k' } }, { tipo: 'terra', pos: [148, 0], rot: 0, props: {} }]);
+        rodar(r.m, 1e-5, 0.05); return r;
+    };
+    const a = mk(5); ok(a.m.v(a.net.pinos.R1[0]) > 4.9, 'ligado: NA fechado ' + a.m.v(a.net.pinos.R1[0]));
+    const b = mk(1); ok(b.m.v(b.net.pinos.R1[0]) < 0.01, 'desligado: NA aberto');
+});
+
+teste('Portas lógicas: tabelas-verdade', () => {
+    const tab = { porta_and: [0, 0, 0, 1], porta_nand: [1, 1, 1, 0], porta_or: [0, 1, 1, 1], porta_nor: [1, 0, 0, 0], porta_xor: [0, 1, 1, 0], porta_xnor: [1, 0, 0, 1] };
+    Object.entries(tab).forEach(([tipo, esp]) => {
+        [[0, 0], [0, 1], [1, 0], [1, 1]].forEach(([a, b], k) => {
+            const els = comIds([{ tipo, pos: [100, 0], rot: 0, props: { VDD: '5', Rout: '0' } },
+                { tipo: 'entradaLogica', pos: [52, -16], rot: 0, props: { alto: !!a, VDD: '5', Rout: '0' } },
+                { tipo: 'entradaLogica', pos: [52, 16], rot: 0, props: { alto: !!b, VDD: '5', Rout: '0' } }, gnd]);
+            const net = Circuito.construir(els, lib()), m = new Motor(net);
+            m.passo(1e-6); m.passo(1e-6);
+            ok((m.v(net.pinos.U1[0]) > 2.5 ? 1 : 0) === esp[k], `${tipo}(${a},${b})`);
+        });
+    });
+    const els = comIds([{ tipo: 'porta_not', pos: [100, 0], rot: 0, props: { VDD: '5', Rout: '0' } }, { tipo: 'entradaLogica', pos: [52, 0], rot: 0, props: { alto: true, VDD: '5', Rout: '0' } }, gnd]);
+    const net = Circuito.construir(els, lib()), m = new Motor(net); m.passo(1e-6); m.passo(1e-6);
+    ok(m.v(net.pinos.U1[0]) < 0.1, 'NOT');
+});
+
+teste('Rótulos de nó com o mesmo nome ligam pontos distantes', () => {
+    const r = montar([fonte(5), { tipo: 'rotuloNo', pos: [0, 0], rot: 0, props: { nome: 'vcc' } },
+        { tipo: 'rotuloNo', pos: [300, 0], rot: 0, props: { nome: 'VCC' } }, { tipo: 'resistor', p: [[300, 0], [300, 100]], props: { R: '1k' } },
+        { tipo: 'terra', pos: [300, 100], rot: 0, props: {} }, gnd]);
+    r.m.passo(1e-6);
+    perto(r.m.prim(r.net.primDe.R1).i, 5e-3, 1e-6);
+});
+
+teste('Fonte PWL interpola e repete', () => {
+    const { valorFonte } = require('../js/motor.js');
+    const f = { forma: 'pwl', pwl: [[0, 0], [1e-3, 5], [2e-3, 0]], repetir: true };
+    perto(valorFonte(f, 0.5e-3), 2.5, 1e-9); perto(valorFonte(f, 2.5e-3), 2.5, 1e-9);
+    perto(valorFonte(Object.assign({}, f, { repetir: false }), 5e-3), 0, 1e-12);
+});
+
+teste('Amperímetro e chave de 2 posições', () => {
+    const mk = (pos) => {
+        const r = montar([fonte(10), { tipo: 'chave2', pos: [32, 0], rot: 0, props: { posicao: pos, Ron: '0', Roff: '∞' } },
+            { tipo: 'resistor', p: [[64, 16], [64, 64]], props: { R: '1k' } }, { tipo: 'amperimetro', p: [[64, 64], [64, 100]], props: { Rint: '0' } },
+            { tipo: 'resistor', p: [[64, -16], [64, -64]], props: { R: '1k' } }, { tipo: 'fio', p: [[64, 100], [0, 100]], props: {} }, gnd]);
+        rodar(r.m, 1e-6, 1e-5); return r.m.prim(r.net.primDe.AM1).i;
+    };
+    perto(mk('B'), 0.01, 1e-5, 'posição B');
+    perto(mk('A'), 0, 1e-9, 'posição A');
+});
+
 // ---------------------------------------------------------------- exemplos
 function simularExemplo(id, T, chaveFechada) {
     const ex = EXEMPLOS.find((e) => e.id === id);
@@ -378,7 +463,7 @@ teste('Todos os componentes do catálogo têm nome, grupo e primitivos', () => {
     Object.entries(Comp.DEFS).forEach(([k, d]) => {
         ok(d.nome && Comp.GRUPOS.some((g) => g.id === d.grupo), k);
         ok(typeof d.prims === 'function' && typeof d.spice === 'function' && typeof d.desenhar === 'function', k);
-        ok(d.bipolo || typeof d.pinos === 'function', k + ' pinos');
+        ok(d.bipolo || typeof d.pinos === 'function' || k === 'texto', k + ' pinos');
     });
 });
 

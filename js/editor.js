@@ -99,6 +99,12 @@
             cv.addEventListener('dblclick', (ev) => { const h = this.acertar(this.mundo(ev)); if (h) { this.selecionarSo(h.el); this.app.selecionou(h.el, true); } });
             cv.addEventListener('wheel', (ev) => {
                 ev.preventDefault();
+                // roda sobre um componente ajustável (potenciômetro) muda o valor, como no Falstad; no resto, zoom
+                const h = this.acertar(this.mundo(ev));
+                if (h && C.DEFS[h.el.tipo].roda) {
+                    this.app.antes(); C.DEFS[h.el.tipo].roda(h.el, ev.deltaY < 0 ? 1 : -1); this.app.mudouValor(h.el);
+                    return;
+                }
                 this.zoom(ev.deltaY < 0 ? 1.15 : 1 / 1.15, ev);
             }, { passive: false });
             cv.addEventListener('contextmenu', (ev) => ev.preventDefault());
