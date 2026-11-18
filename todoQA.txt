@@ -1,0 +1,40 @@
+TODO / QA — Simulador de Circuitos (Falstad + SPICE)
+Marcadores: [fazer] [futuro] [resolvido] [rejeitado]
+Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de referência).
+
+=== DIRETRIZES PERMANENTES
+- Mesma identidade visual da Central de Aplicativos, QFD, Projeto Conceitual, Gestão de Projetos e Supervisório MQTT (cores, topo, menu lateral, rodapé).
+- Usabilidade do simulador do Prof. Falstad, mas código próprio: não copiar código do circuitjs1 (GPL) para manter o projeto proprietário.
+- 100% no navegador, sem servidor. Sem CDN: biblioteca de terceiros entra copiada em vendor/ com a licença dela.
+- Modelos SPICE: pasta modelos/ (+ indice.json via node tests/gerar-embutidos.js), pasta do usuário, arquivos ou texto colado.
+- Componente sem modelo = Caixa SPICE com pinos nomeados; ao escolher o .subckt, os pinos vêm do modelo.
+- Texto vindo de arquivos sempre por esc() ao montar a página. Dados só no navegador (localStorage com try/catch).
+- Todo arquivo novo começa com a linha de direitos autorais. Trocar o ?v= ao publicar.
+- Testar em 360, 768, 1024 e 1920 px: nada sai da tela. Rodar node tests/testes.js antes de publicar.
+
+=== O QUE FOI FEITO
+1 [resolvido 18/11/2026] Motor em tempo real: MNA, passo fixo, trapezoidal, Newton com pnjlim; R, C, L, V, I, E, G, F, H, chave, diodo, BJT, MOSFET nível 1, amp-op ideal.
+2 [resolvido 18/11/2026] Editor estilo Falstad: arrastar na grade, cores pela tensão, pontos de corrente, chave clicável, valores ao passar o mouse, nós e pinos soltos marcados, desfazer/refazer, zoom/arrastar, teclas de atalho.
+3 [resolvido 18/11/2026] Velocidades programadas (tempo real a 0,0001× e máxima), passo de tempo ajustável, pausar, passo a passo, reiniciar, razão tempo simulado/real.
+4 [resolvido 18/11/2026] Osciloscópio com até 4 traços (V ou I), escala automática, base de tempo ajustável.
+5 [resolvido 18/11/2026] Biblioteca SPICE: pasta (com subpastas), arquivos, texto colado, pasta modelos/ do repositório; busca por nome, tipo, arquivo e pino; "Usar" no selecionado ou cria componente.
+6 [resolvido 18/11/2026] Caixa SPICE (subcircuito) com pinos nomeados; expansão de .subckt aninhados; marca o que o tempo real não roda.
+7 [resolvido 18/11/2026] Exportar netlist SPICE (.cir) com modelos e subcircuitos usados; salvar/abrir .json; guarda no navegador.
+8 [resolvido 18/11/2026] Biblioteca de exemplo (modelos/basicos.lib) e 5 exemplos: RC, retificador, LED, emissor comum, amp-op inversor com .subckt.
+
+=== O QUE FALTA
+9  [fazer] Bloco Microcontrolador (firmware em C), etapa 1: bloco com pinos (GPIO/ADC/PWM) e HAL em JS ligada ao motor (ver ARQUITETURA.md, seção 4).
+10 [fazer] Microcontrolador, modo A: C compilado no navegador para WebAssembly (clang em vendor/), firmware num Web Worker sincronizado com o tempo simulado.
+11 [fazer] Microcontrolador, modo B: emulação do ATmega328P (avr8js, MIT) rodando .hex do Arduino; depois RP2040 (rp2040js).
+12 [fazer] ngspice em WebAssembly (vendor/, Web Worker): .op sobre o desenho, Bode (.ac), curva DC, ruído, Fourier/THD, .step, temperatura, Monte Carlo.
+13 [fazer] Capacitâncias de junção (CJO, CJE, CJC, TT) no tempo real.
+14 [fazer] Mais componentes: potenciômetro, transformador, lâmpada, relé, portas lógicas, fonte PWL, amperímetro.
+15 [futuro] Abrir pasta com a File System Access API (lembrar a pasta entre sessões) e pasta de modelos na nuvem MEGA da equipe.
+16 [futuro] Importar o formato de texto do Falstad (circuitjs) para reaproveitar circuitos prontos.
+17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
+
+=== QA (18/11/2026)
+- node tests/testes.js: 25 de 25 passaram (divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
+- Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
+  "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

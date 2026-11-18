@@ -1,0 +1,63 @@
+* © 2026 Simulador de Circuitos (Falstad + SPICE) — Marlon Sigales.
+* Biblioteca básica de exemplo. Parâmetros típicos de folhas de dados e modelos públicos de fabricantes;
+* para projeto, prefira sempre o modelo oficial do fabricante (ponha o arquivo na pasta de modelos).
+
+* ---------------- Diodos
+.model 1N4148 D(IS=2.52n N=1.752 RS=0.568 BV=100 IBV=100u CJO=4p TT=20n)
+.model 1N4007 D(IS=7.02n N=1.81 RS=0.034 BV=1000 IBV=5u CJO=10p)
+.model 1N5819 D(IS=31.7u N=1.373 RS=0.051 BV=40 IBV=1m CJO=110p)
+* Zener 5,1 V
+.model 1N4733 D(IS=1n N=1.2 RS=1 BV=5.1 IBV=49m)
+.model LED_VERMELHO D(IS=1e-20 N=1.5 RS=2)
+.model LED_VERDE D(IS=1e-22 N=1.6 RS=3)
+.model LED_AZUL D(IS=1e-28 N=2 RS=5)
+
+* ---------------- Transistores bipolares
+.model 2N3904 NPN(IS=6.734f BF=416.4 BR=0.7371 NF=1 NR=1 VAF=74.03)
+.model 2N3906 PNP(IS=1.41f BF=180.7 BR=4.977 NF=1 NR=1 VAF=18.7)
+.model BC548 NPN(IS=7.049f BF=375.5 BR=7.4 VAF=62.79)
+.model BC558 PNP(IS=10.2f BF=260 BR=5 VAF=40)
+
+* ---------------- MOSFET (nível 1, aproximação para fins didáticos)
+.model MOSFET_N_GENERICO NMOS(VTO=2 KP=0.1 LAMBDA=0.01)
+.model MOSFET_P_GENERICO PMOS(VTO=-2 KP=0.05 LAMBDA=0.01)
+
+* ---------------- Subcircuitos
+* Amp-op genérico: ganho 100 dB, polo em 10 Hz (GBW 1 MHz), saída limitada a 1,5 V das alimentações
+* pinos: IN+ IN- VCC VEE OUT
+.subckt AMPOP_GENERICO INP INM VCC VEE OUT
+RIN INP INM 2MEG
+G1 0 N1 INP INM 1
+R1 N1 0 100k
+C1 N1 0 159n
+VP VCC NA 1.5
+VN NB VEE 1.5
+D1 N1 NA DCLAMP
+D2 NB N1 DCLAMP
+E1 N2 0 N1 0 1
+ROUT N2 OUT 75
+RQ VCC VEE 20k
+.model DCLAMP D(IS=1e-15 N=1)
+.ends AMPOP_GENERICO
+
+* Optoacoplador simples: LED + fototransistor (CTR ~ 100 %)
+* pinos: ANODO CATODO COLETOR EMISSOR
+.subckt OPTO_GENERICO A K C E
+D1 A NK LED_VERMELHO
+VS NK K 0
+F1 C B VS 0.01
+Q1 C B E NPN_OPTO
+.model NPN_OPTO NPN(IS=1e-14 BF=100)
+.ends OPTO_GENERICO
+
+* Regulador linear 5 V simplificado (tipo 7805): queda mínima ~2 V
+* pinos: IN GND OUT
+.subckt REG_5V IN GND OUT
+VREF R GND 5
+EOP B GND R OUTF 1000
+RB B BQ 100
+Q1 IN BQ OUT NPN_REG
+ROUTF OUT OUTF 1
+RF OUTF GND 10k
+.model NPN_REG NPN(IS=1e-14 BF=100)
+.ends REG_5V

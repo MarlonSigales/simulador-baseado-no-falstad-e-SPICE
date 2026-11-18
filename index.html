@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<!-- © 2026 Simulador de Circuitos (Falstad + SPICE) — Marlon Sigales. Todos os direitos reservados; copiar, reproduzir ou alterar exige autorização do autor (ver LICENSE). -->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Circuitos — Falstad + SPICE</title>
+    <meta name="description" content="Simulador de circuitos em tempo real no navegador, com a usabilidade do simulador do Prof. Falstad e modelos SPICE (.model e .subckt) para os componentes.">
+    <link rel="icon" type="image/png" href="img/icone-instagri.png">
+    <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
+    <link rel="stylesheet" href="css/style.css?v=20261118a">
+    <link rel="stylesheet" href="css/simulador.css?v=20261118a">
+</head>
+<body>
+    <header class="topbar">
+        <button type="button" class="sidebar-toggle" aria-label="Abrir o menu de componentes" aria-expanded="false"></button>
+        <a href="#inicio" class="topbar-marca" title="Início">
+            <img src="img/logo-instagri.png" alt="" height="36">
+            <span>Simulador de Circuitos</span>
+        </a>
+        <span class="topbar-projeto">Falstad + SPICE · Marlon Sigales · Engenharia Agrícola · CEng/UFPel</span>
+        <span class="topbar-selo" title="Versão">v0.1</span>
+    </header>
+
+    <div class="app-corpo">
+        <aside class="sidebar" id="sidebar">
+            <nav id="sidebar-nav" aria-label="Componentes"></nav>
+            <div class="sidebar-arquivo">
+                <span class="sidebar-arquivo-rotulo">Circuito</span>
+                <select id="exemplos" class="sidebar-select" aria-label="Exemplos"></select>
+                <div class="sidebar-botoes">
+                    <button type="button" class="sidebar-arquivo-btn" data-acao="salvar" title="Baixar o circuito (.json)">💾 Salvar</button>
+                    <button type="button" class="sidebar-btn2" data-acao="abrir" title="Abrir um circuito salvo (.json)">📂 Abrir</button>
+                    <button type="button" class="sidebar-btn2" data-acao="exportar-spice" title="Netlist para ngspice/LTspice">⤓ Netlist SPICE</button>
+                    <button type="button" class="sidebar-btn2" data-acao="novo">✚ Novo</button>
+                </div>
+                <input type="file" id="abrir-json" accept=".json,application/json" hidden>
+            </div>
+        </aside>
+        <div class="sidebar-fundo"></div>
+
+        <div class="app-conteudo">
+            <main class="main-content" id="app" tabindex="-1">
+                <div class="sim-container" id="inicio">
+                    <section class="card sim-barra" aria-label="Controles da simulação">
+                        <button type="button" class="btn btn-sm" data-acao="rodar">⏸ Pausar</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-acao="passo" title="Avança um passo de tempo">⏭ Passo</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-acao="reiniciar" title="Volta ao tempo zero (descarrega capacitores e indutores)">⟲ Reiniciar</button>
+                        <label class="sim-campo">Velocidade <select id="velocidade"></select></label>
+                        <label class="sim-campo">Passo de tempo <input id="passo" type="text" value="10µs" size="6" spellcheck="false" title="Aceita sufixo SPICE: 1u, 10u, 1m"></label>
+                        <span class="sim-campo">t = <b id="tempo-sim">0 s</b> <small title="Tempo simulado por segundo real">(<span id="razao">—</span>)</small></span>
+                        <span class="sim-sep"></span>
+                        <label class="sim-campo" title="Velocidade dos pontos de corrente"><input type="checkbox" id="mostrar-corrente" checked> Corrente <input type="range" id="vel-corrente" min="1" max="6" step="0.1" value="3.6"></label>
+                        <span class="sim-grupo">
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="desfazer" title="Desfazer (Ctrl+Z)">↶</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="refazer" title="Refazer (Ctrl+Y)">↷</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="zoom-menos" title="Diminuir">−</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="zoom-mais" title="Aumentar">+</button>
+                            <button type="button" class="btn btn-secondary btn-sm" data-acao="centralizar" title="Enquadrar o circuito">⤢</button>
+                        </span>
+                    </section>
+
+                    <div class="sim-grade">
+                        <div class="sim-esquerda">
+                            <div class="card sim-tela-card">
+                                <div class="sim-tela"><canvas id="tela" aria-label="Circuito"></canvas></div>
+                                <div class="sim-hover" id="hover" hidden></div>
+                                <ul class="sim-avisos" id="avisos" hidden></ul>
+                                <p class="sim-modo" id="modo"></p>
+                            </div>
+                            <section class="card sim-osc-card" aria-label="Osciloscópio">
+                                <div class="card-topo">
+                                    <h2>📈 Osciloscópio</h2>
+                                    <span class="osc-controles">
+                                        <label class="sim-campo">1 ponto a cada
+                                            <select id="osc-n"><option>1</option><option>2</option><option selected>5</option><option>10</option><option>20</option><option>50</option><option>100</option><option>500</option></select> passos</label>
+                                        <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-limpar">Limpar</button>
+                                    </span>
+                                </div>
+                                <div class="osc-tracos" id="osc-traços"></div>
+                                <div class="osc-tela"><canvas id="osc"></canvas></div>
+                            </section>
+                        </div>
+
+                        <div class="sim-direita">
+                            <section class="card" id="painel-prop">
+                                <h2>Propriedades</h2>
+                                <div id="prop"></div>
+                            </section>
+
+                            <section class="card" id="painel-biblioteca">
+                                <h2>📚 Biblioteca SPICE</h2>
+                                <p class="muted" id="bib-totais"></p>
+                                <div class="bib-botoes">
+                                    <button type="button" class="btn btn-primary btn-sm" data-acao="bib-pasta" title="Lê todos os .lib/.mod/.sub/.cir/.txt da pasta e subpastas">📁 Abrir pasta de modelos</button>
+                                    <button type="button" class="btn btn-secondary btn-sm" data-acao="bib-arquivos">📄 Arquivos</button>
+                                </div>
+                                <input type="file" id="bib-pasta" webkitdirectory directory multiple hidden>
+                                <input type="file" id="bib-arquivos" multiple accept=".lib,.mod,.sub,.cir,.txt,.sp,.spi,.spice,.inc,.ckt,.model" hidden>
+                                <input type="search" id="bib-busca" class="bib-busca" placeholder="Buscar: nome, tipo (npn, d, subckt), pino…" aria-label="Buscar na biblioteca">
+                                <ul class="bib-lista" id="bib-lista"></ul>
+                                <details class="bib-det">
+                                    <summary>Colar um .model ou .subckt</summary>
+                                    <textarea id="bib-texto" rows="6" spellcheck="false" placeholder=".model MEU_DIODO D(IS=1n N=1.8)&#10;ou&#10;* pinos: IN GND OUT&#10;.subckt MEU_CI IN GND OUT&#10;...&#10;.ends"></textarea>
+                                    <button type="button" class="btn btn-secondary btn-sm" data-acao="bib-colar">Adicionar à biblioteca</button>
+                                </details>
+                                <details class="bib-det">
+                                    <summary>Arquivos carregados</summary>
+                                    <ul class="bib-arquivos" id="bib-arquivos-lista"></ul>
+                                </details>
+                                <p class="muted bib-dica">Componente sem modelo? Ponha uma <b>Caixa SPICE</b>, digite os nomes dos pinos e depois escolha o <code>.subckt</code>: os pinos passam a ser os do modelo.</p>
+                            </section>
+
+                            <section class="card">
+                                <h2>Como usar</h2>
+                                <ul class="como-usar">
+                                    <li>Escolha um componente no menu e <b>arraste na grade</b> de uma ponta à outra (fios: tecla <kbd>w</kbd>).</li>
+                                    <li>Pinos que se tocam na grade ficam ligados; ponto preto = nó com 3 ou mais ligações; círculo vermelho = pino solto.</li>
+                                    <li>Verde = tensão positiva, vermelho = negativa; os pontos amarelos andam com a corrente.</li>
+                                    <li>Clique na chave para abrir/fechar. Passe o mouse para ver tensão, corrente e potência.</li>
+                                    <li>Arraste o fundo para mover a vista; roda do mouse aproxima. <kbd>Shift</kbd>+<kbd>R</kbd> gira, <kbd>Delete</kbd> apaga, <kbd>Espaço</kbd> pausa.</li>
+                                </ul>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <footer class="footer">
+                <div class="container">
+                    <div class="footer-logos">
+                        <img src="img/logo-inovaagro.png" alt="EMBRAPII - Inova Agro - UFPel" height="64">
+                        <img src="img/logo-nimeq.png" alt="NIMEq" height="64">
+                        <img src="img/logo-instagri.png" alt="Laboratório de Instrumentação Agrícola - UFPel" height="64">
+                    </div>
+                    <p>&copy; 2026 Simulador de Circuitos (Falstad + SPICE)</p>
+                    <p class="footer-credits">
+                        A usabilidade se inspira no simulador de circuitos do Prof. Paul Falstad
+                        (<a href="https://www.falstad.com/circuit/" target="_blank" rel="noopener">falstad.com/circuit</a>); o código deste app é próprio.
+                    </p>
+                    <p class="footer-credits">
+                        <strong>Desenvolvedor:</strong> Marlon Soares Sigales<br>
+                        <strong>Equipe Inova Agro - UFPel - EMBRAPII</strong>
+                    </p>
+                    <p class="footer-credits">
+                        © 2026 Marlon Sigales. Todos os direitos reservados: copiar, reproduzir ou alterar o código exige autorização do autor.
+                    </p>
+                </div>
+            </footer>
+        </div>
+    </div>
+
+    <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
+
+    <script src="js/spice.js?v=20261118a"></script>
+    <script src="js/motor.js?v=20261118a"></script>
+    <script src="js/componentes.js?v=20261118a"></script>
+    <script src="js/biblioteca.js?v=20261118a"></script>
+    <script src="js/circuito.js?v=20261118a"></script>
+    <script src="js/modelos-embutidos.js?v=20261118a"></script>
+    <script src="js/exemplos.js?v=20261118a"></script>
+    <script src="js/editor.js?v=20261118a"></script>
+    <script src="js/app.js?v=20261118a"></script>
+</body>
+</html>

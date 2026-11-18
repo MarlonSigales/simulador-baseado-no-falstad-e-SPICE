@@ -1,0 +1,20 @@
+Copyright (c) 2026 Marlon Sigales
+Todos os direitos reservados.
+
+Este software (código-fonte, folhas de estilo, páginas, figuras, modelos de exemplo e documentação deste repositório) é de
+propriedade do autor. O código está publicado para consulta e uso do simulador por meio do site; nenhuma licença é concedida
+além disso. Sem autorização prévia e por escrito do autor, é proibido copiar, reproduzir, modificar, distribuir, sublicenciar
+ou criar obras derivadas, no todo ou em parte.
+
+O código deste simulador foi escrito do zero. A interação se inspira no simulador de circuitos do Prof. Paul Falstad
+(falstad.com/circuit, github.com/pfalstad/circuitjs1, licença GPL), mas nenhum código dele foi copiado.
+
+Componentes de terceiros previstos (ainda não incluídos), cada um com a sua licença, que deverá acompanhar o arquivo quando
+for incluído na pasta vendor/: ngspice (BSD modificada), eecircuit-engine (MIT), avr8js (MIT), rp2040js (MIT),
+clang/LLVM compilado para WebAssembly (Apache-2.0 com exceção LLVM).
+
+Modelos SPICE de fabricantes que o usuário puser na pasta de modelos continuam sob os termos de cada fabricante.
+
+O SOFTWARE É FORNECIDO "NO ESTADO EM QUE SE ENCONTRA", SEM GARANTIAS DE QUALQUER TIPO.
+
+Pedidos de autorização: Marlon Sigales.
