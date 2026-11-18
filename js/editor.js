@@ -17,7 +17,8 @@
             this.g = canvas.getContext('2d');
             this.app = app;
             this.els = [];
-            this.sel = null;
+            this.sel = null;          // principal (painel de propriedades)
+            this.sels = new Set();    // seleção (vários com área, Shift+clique ou Ctrl+A)
             this.ferramenta = 'selecionar';
             this.vista = { ox: 40, oy: 20, z: 1 };
             this.arrasto = null;
@@ -44,6 +45,8 @@
         centro() { return this.grade([(this.w / 2 - this.vista.ox) / this.vista.z, (this.h / 2 - this.vista.oy) / this.vista.z]); }
 
         el(id) { return this.els.find((e) => e.id === id) || null; }
+        selecionarSo(el) { this.sels = new Set(el ? [el.id] : []); this.sel = el ? el.id : null; }
+        selecionados() { return this.els.filter((e) => this.sels.has(e.id)); }
         selecionado() { return this.sel ? this.el(this.sel) : null; }
 
         // ------------------------------------------------------------ teste de clique
@@ -61,7 +64,7 @@
             }
             return d.caixa.call(d, el, this.app.lib);
         }
-        acertar(pt) {
+        acertar(pt, qualquerPonta) {
             const tol = 8 / this.vista.z;
             // pontas de bipolos (para esticar)
             for (let i = this.els.length - 1; i >= 0; i--) {
@@ -69,7 +72,7 @@
                 if (!C.DEFS[e.tipo].bipolo) continue;
                 for (let k = 0; k < 2; k++) if (Math.hypot(pt[0] - e.p[k][0], pt[1] - e.p[k][1]) < tol && (e.id === this.sel || this.ferramenta === 'selecionar')) {
                     // só pega a ponta se o mouse estiver de fato sobre ela e o elemento estiver selecionado ou for fio
-                    if (e.id === this.sel || e.tipo === 'fio') return { el: e, ponta: k };
+                    if (e.id === this.sel || e.tipo === 'fio' || qualquerPonta) return { el: e, ponta: k };
                 }
             }
             // corpos: componentes antes dos fios
@@ -89,7 +92,7 @@
             cv.addEventListener('pointermove', (ev) => this.mover(ev));
             cv.addEventListener('pointerup', (ev) => this.cima(ev));
             cv.addEventListener('pointerleave', () => { this.mouse = null; this.app.infoHover(null); });
-            cv.addEventListener('dblclick', (ev) => { const h = this.acertar(this.mundo(ev)); if (h) { this.sel = h.el.id; this.app.selecionou(h.el, true); } });
+            cv.addEventListener('dblclick', (ev) => { const h = this.acertar(this.mundo(ev)); if (h) { this.selecionarSo(h.el); this.app.selecionou(h.el, true); } });
             cv.addEventListener('wheel', (ev) => {
                 ev.preventDefault();
                 this.zoom(ev.deltaY < 0 ? 1.15 : 1 / 1.15, ev);
@@ -110,7 +113,8 @@
             this.cv.setPointerCapture(ev.pointerId);
             const pt = this.mundo(ev), gp = this.grade(pt);
             const fer = this.ferramenta;
-            if (ev.button === 1 || ev.button === 2) { this.arrasto = { tipo: 'pan', x: ev.clientX, y: ev.clientY, ox: this.vista.ox, oy: this.vista.oy }; return; }
+            // como no Falstad: botão direito/do meio ou Alt+arrastar movem a vista
+            if (ev.button === 1 || ev.button === 2 || ev.altKey) { this.arrasto = { tipo: 'pan', x: ev.clientX, y: ev.clientY, ox: this.vista.ox, oy: this.vista.oy }; return; }
             if (fer !== 'selecionar') {
                 const d = C.DEFS[fer];
                 this.app.antes();
@@ -119,20 +123,29 @@
                     this.arrasto = { tipo: 'criar', el, inicio: gp, moveu: false };
                 } else {
                     const el = this.app.novo(fer, { pos: gp, rot: 0 });
-                    this.arrasto = { tipo: 'mover', el, ultimo: gp, criado: true, moveu: true };
+                    this.arrasto = { tipo: 'mover', grupo: [el], el, ultimo: gp, criado: true, moveu: true };
                 }
                 return;
             }
-            const h = this.acertar(pt);
-            if (h && h.ponta !== undefined) { this.app.antes(); this.arrasto = { tipo: 'ponta', el: h.el, ponta: h.ponta, moveu: false }; this.sel = h.el.id; return; }
+            const h = this.acertar(pt, ev.ctrlKey || ev.metaKey);
+            if (h && h.ponta !== undefined) { this.app.antes(); this.selecionarSo(h.el); this.app.selecionou(h.el); this.arrasto = { tipo: 'ponta', el: h.el, ponta: h.ponta, moveu: false }; return; }
             if (h) {
-                this.sel = h.el.id;
+                if (ev.shiftKey) { // Shift+clique: põe/tira da seleção
+                    if (this.sels.has(h.el.id)) this.sels.delete(h.el.id); else this.sels.add(h.el.id);
+                    this.sel = this.sels.size ? [...this.sels].pop() : null;
+                    this.app.selecionou(this.selecionado());
+                    return;
+                }
+                if (!this.sels.has(h.el.id)) this.selecionarSo(h.el); else this.sel = h.el.id;
                 this.app.selecionou(h.el);
-                this.arrasto = { tipo: 'mover', el: h.el, ultimo: gp, moveu: false, snapshot: JSON.stringify(this.els) };
+                this.arrasto = { tipo: 'mover', grupo: this.selecionados(), el: h.el, ultimo: gp, moveu: false, snapshot: JSON.stringify(this.els) };
                 return;
             }
-            this.sel = null; this.app.selecionou(null);
-            this.arrasto = { tipo: 'pan', x: ev.clientX, y: ev.clientY, ox: this.vista.ox, oy: this.vista.oy };
+            // fundo: no toque move a vista; com mouse faz seleção por área (Shift soma à seleção)
+            if (ev.pointerType === 'touch') { this.selecionarSo(null); this.app.selecionou(null); this.arrasto = { tipo: 'pan', x: ev.clientX, y: ev.clientY, ox: this.vista.ox, oy: this.vista.oy }; return; }
+            const base = ev.shiftKey ? new Set(this.sels) : new Set();
+            if (!ev.shiftKey) { this.selecionarSo(null); this.app.selecionou(null); }
+            this.arrasto = { tipo: 'area', inicio: pt, atual: pt, base };
         }
 
         mover(ev) {
@@ -141,6 +154,13 @@
             const a = this.arrasto;
             if (!a) { const h = this.acertar(pt); this.cv.style.cursor = this.ferramenta !== 'selecionar' ? 'crosshair' : h ? (h.ponta !== undefined ? 'move' : (C.DEFS[h.el.tipo].clicavel ? 'pointer' : 'grab')) : 'default'; this.app.infoHover(h ? h.el : null, pt); return; }
             if (a.tipo === 'pan') { this.vista.ox = a.ox + ev.clientX - a.x; this.vista.oy = a.oy + ev.clientY - a.y; return; }
+            if (a.tipo === 'area') {
+                a.atual = pt;
+                const x0 = Math.min(a.inicio[0], pt[0]), x1 = Math.max(a.inicio[0], pt[0]), y0 = Math.min(a.inicio[1], pt[1]), y1 = Math.max(a.inicio[1], pt[1]);
+                this.sels = new Set(a.base);
+                this.els.forEach((e) => { const [x, y, w, h] = this.caixa(e); if (x <= x1 && x + w >= x0 && y <= y1 && y + h >= y0) this.sels.add(e.id); });
+                return;
+            }
             if (a.tipo === 'criar') {
                 let q = gp;
                 // como no Falstad: ângulos retos por padrão (Shift solta)
@@ -154,22 +174,32 @@
                 if (!dx && !dy) return;
                 if (!a.moveu && a.snapshot) this.app.antes(a.snapshot);
                 a.moveu = true; a.ultimo = gp;
-                if (a.el.p) a.el.p.forEach((p) => { p[0] += dx; p[1] += dy; }); else { a.el.pos[0] += dx; a.el.pos[1] += dy; }
+                this.deslocar(a.grupo || [a.el], dx, dy);
                 this.app.mudouTopologia();
             }
+        }
+
+        deslocar(els, dx, dy) {
+            els.forEach((e) => { if (e.p) e.p.forEach((p) => { p[0] += dx; p[1] += dy; }); else { e.pos[0] += dx; e.pos[1] += dy; } });
         }
 
         cima() {
             const a = this.arrasto;
             this.arrasto = null;
             if (!a) return;
+            if (a.tipo === 'area') {
+                this.sel = this.sels.size === 1 ? [...this.sels][0] : (this.sels.size ? [...this.sels].pop() : null);
+                this.app.selecionou(this.selecionado());
+                return;
+            }
             if (a.tipo === 'criar') {
                 if (!a.moveu) { a.el.p[1] = [a.inicio[0] + 4 * G, a.inicio[1]]; } // clique simples: tamanho padrão
-                this.sel = a.el.id; this.app.selecionou(a.el); this.app.mudouTopologia();
+                this.selecionarSo(a.el); this.app.selecionou(a.el); this.app.mudouTopologia();
             } else if (a.tipo === 'mover' && !a.moveu && !a.criado) {
                 const d = C.DEFS[a.el.tipo];
                 if (d.clicavel) { this.app.antes(); d.clicar(a.el); this.app.mudouValor(a.el); }
-            } else if (a.tipo === 'mover' && a.criado) { this.sel = a.el.id; this.app.selecionou(a.el); this.app.mudouTopologia(); }
+                else if (this.sels.size > 1) { this.selecionarSo(a.el); this.app.selecionou(a.el); }
+            } else if (a.tipo === 'mover' && a.criado) { this.selecionarSo(a.el); this.app.selecionou(a.el); this.app.mudouTopologia(); }
             else if (a.tipo === 'ponta') {
                 const e = a.el;
                 if (e.p[0][0] === e.p[1][0] && e.p[0][1] === e.p[1][1]) this.app.excluir(e.id);
@@ -192,12 +222,19 @@
             g.lineCap = 'round'; g.lineJoin = 'round';
 
             const contagem = {};
-            const sel = this.selecionado();
-            if (sel) {
+            g.save(); g.lineWidth = 1 / v.z; g.setLineDash([4 / v.z, 3 / v.z]);
+            this.selecionados().forEach((sel) => {
                 const [x, y, w, h] = this.caixa(sel);
-                g.save(); g.fillStyle = 'rgba(168,225,86,.28)'; g.strokeStyle = 'rgba(64,149,128,.8)'; g.lineWidth = 1 / v.z; g.setLineDash([4 / v.z, 3 / v.z]);
-                g.fillRect(x - 3, y - 3, w + 6, h + 6); g.strokeRect(x - 3, y - 3, w + 6, h + 6); g.restore();
+                g.fillStyle = sel.id === this.sel ? 'rgba(168,225,86,.30)' : 'rgba(168,225,86,.18)'; g.strokeStyle = 'rgba(64,149,128,.8)';
+                g.fillRect(x - 3, y - 3, w + 6, h + 6); g.strokeRect(x - 3, y - 3, w + 6, h + 6);
+            });
+            if (this.arrasto && this.arrasto.tipo === 'area') {
+                const { inicio: [x0, y0], atual: [x1, y1] } = this.arrasto;
+                g.strokeStyle = '#085357'; g.fillStyle = 'rgba(8,83,87,.06)';
+                g.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+                g.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
             }
+            g.restore();
             const ordem = this.els.slice().sort((a, b) => (b.tipo === 'fio') - (a.tipo === 'fio'));
             for (const el of ordem) {
                 const d = C.DEFS[el.tipo];

@@ -199,6 +199,17 @@ teste('Caixa SPICE sem modelo: pinos pelos nomes digitados', () => {
     ok(net.avisos.some((a) => /sem modelo/.test(a)));
 });
 
+teste('Amp-op da biblioteca usa o triângulo; pinos nas posições da bibliografia', () => {
+    const L = lib();
+    const el = { id: 'X1', tipo: 'caixa', pos: [0, 0], rot: 0, props: { modelo: 'AMPOP_GENERICO', simbolo: 'auto' } };
+    const gm = Comp.DEFS.caixa.geometria(el, L);
+    ok(gm.ampop, 'reconhece amp-op');
+    ok(JSON.stringify(Comp.pinos(el, L)) === JSON.stringify([[-48, 16], [-48, -16], [0, -48], [0, 48], [64, 0]]), JSON.stringify(Comp.pinos(el, L)));
+    el.props.simbolo = 'caixa';
+    ok(!Comp.DEFS.caixa.geometria(el, L).ampop, 'opção caixa retangular');
+    ok(!Comp.DEFS.caixa.geometria({ id: 'X2', tipo: 'caixa', pos: [0, 0], props: { modelo: 'REG_5V' } }, L).ampop, 'regulador continua caixa');
+});
+
 teste('Caixa SPICE: ao escolher o .subckt, os pinos vêm do modelo', () => {
     const el = { id: 'X1', tipo: 'caixa', pos: [0, 0], rot: 0, props: { modelo: 'REG_5V', pinos: 'A' } };
     ok(Comp.pinos(el, lib()).length === 3);
@@ -250,7 +261,7 @@ teste('Exemplo amp-op inversor (subcircuito): ganho −10', () => {
     ok(!s.net.avisos.length, s.net.avisos.join(' | '));
     s.rodar(2e-3);
     let max = -1e9, min = 1e9;
-    for (let i = 0; i < 500; i++) { s.m.passo(2e-6); const v = s.v(13, 0); max = Math.max(max, v); min = Math.min(min, v); }
+    for (let i = 0; i < 500; i++) { s.m.passo(2e-6); const v = s.v(12, 0); max = Math.max(max, v); min = Math.min(min, v); }
     perto((max - min) / 2, 10, 0.4, 'amplitude de saída');
     ok(s.m.naoConvergiu === 0, 'convergência');
 });

@@ -18,7 +18,8 @@
         NPN: { nome: 'NPN_PADRAO', tipo: 'NPN', params: { IS: 1e-14, BF: 100, BR: 1 } },
         PNP: { nome: 'PNP_PADRAO', tipo: 'PNP', params: { IS: 1e-14, BF: 100, BR: 1 } },
         NMOS: { nome: 'NMOS_PADRAO', tipo: 'NMOS', params: { VTO: 1.5, KP: 0.02 } },
-        PMOS: { nome: 'PMOS_PADRAO', tipo: 'PMOS', params: { VTO: -1.5, KP: 0.02 } }
+        PMOS: { nome: 'PMOS_PADRAO', tipo: 'PMOS', params: { VTO: -1.5, KP: 0.02 } },
+        ZENER: { nome: 'ZENER_PADRAO', tipo: 'D', params: { IS: 1e-14, N: 1, BV: 5.6, IBV: 5e-3 } }
     };
 
     const CORES_LED = { vermelho: '#ff2a2a', verde: '#2bd94a', azul: '#3a7bff', amarelo: '#ffd21a', branco: '#ffffff' };
@@ -151,7 +152,7 @@
             spice(el, n) { return `${nm('C', el)} ${n[0]} ${n[1]} ${el.props.C}`; }
         },
         indutor: {
-            icone: 'L', nome: 'Indutor', grupo: 'passivos', bipolo: true, tecla: 'l', props: { L: '10m' },
+            icone: 'L', nome: 'Indutor', grupo: 'passivos', bipolo: true, tecla: 'L', props: { L: '10m' },
             campos: [{ k: 'L', r: 'Indutância', u: 'H' }],
             texto: (el) => fmt(el.props.L, 'H'),
             desenhar(g, el, info) {
@@ -205,7 +206,7 @@
             spice(el, n) { return `${nm('V', el)} ${n[1]} ${n[0]} ${spiceFonte(el.props)}`; }
         },
         trilho: {
-            icone: '+', nome: 'Trilho de tensão (+V)', curto: 'Trilho +V', grupo: 'fontes', bipolo: false, tecla: 'a',
+            icone: '+', nome: 'Trilho de tensão (+V)', curto: 'Trilho +V', grupo: 'fontes', bipolo: false, tecla: 'V',
             props: { forma: 'dc', V: '5', amplitude: '5', freq: '60', offset: '0', fase: '0', duty: '0.5' },
             campos: CAMPOS_FONTE,
             pinos: (el) => pinosPorOffsets(el, [[0, 0]]),
@@ -223,7 +224,7 @@
             spice(el, n) { return `${nm('V', el)} ${n[0]} 0 ${spiceFonte(el.props)}`; }
         },
         fonteI: {
-            icone: 'I', nome: 'Fonte de corrente', grupo: 'fontes', bipolo: true, tecla: 'i', props: { I: '1m' },
+            icone: 'I', nome: 'Fonte de corrente', grupo: 'fontes', bipolo: true, props: { I: '1m' },
             campos: [{ k: 'I', r: 'Corrente', u: 'A' }],
             texto: (el) => fmt(el.props.I, 'A'),
             desenhar(g, el, info) {
@@ -259,8 +260,20 @@
             prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.D }); },
             spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.D)}`; }
         },
+        zener: {
+            icone: 'Z', nome: 'Diodo zener', curto: 'Zener', grupo: 'semicondutores', bipolo: true, tecla: 'z', props: { modelo: '' },
+            campos: [{ k: 'modelo', r: 'Modelo SPICE (com BV)', tipo: 'modelo', tipos: ['D'] }],
+            texto: (el) => el.props.modelo || 'zener 5,6 V',
+            desenhar(g, el, info) {
+                bipolo(g, el, info, 32, (g, c) => desenhaDiodo(g, c, info, (g, x0, x1) => {
+                    g.lineWidth = 3; linha(g, x1, -9, x1 - 5, -13); linha(g, x1, 9, x1 + 5, 13);
+                }));
+            },
+            prims(el, n, ctx) { ctx.add({ tipo: 'D', nos: n, modelo: ctx.modelo(el.props.modelo, ['D']) || MODELOS_PADRAO.ZENER }); },
+            spice(el, n, ctx) { return `${nm('D', el)} ${n[0]} ${n[1]} ${ctx.nomeModelo(el.props.modelo, MODELOS_PADRAO.ZENER)}`; }
+        },
         led: {
-            icone: '✦', nome: 'LED', grupo: 'semicondutores', bipolo: true, props: { modelo: '', cor: 'vermelho' },
+            icone: '✦', nome: 'LED', grupo: 'semicondutores', bipolo: true, tecla: 'l', props: { modelo: '', cor: 'vermelho' },
             campos: [
                 { k: 'cor', r: 'Cor', tipo: 'sel', op: Object.keys(CORES_LED).map((c) => [c, c]) },
                 { k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: ['D'] }
@@ -288,7 +301,7 @@
         nmos: transistorMOS('nmos', 'MOSFET canal N', 'NMOS'),
         pmos: transistorMOS('pmos', 'MOSFET canal P', 'PMOS'),
         ampop: {
-            icone: '△', nome: 'Amp-op ideal', grupo: 'integrados', bipolo: false, tecla: 'o', props: { ganho: '100k', vmax: '15', vmin: '-15' },
+            icone: '△', nome: 'Amp-op ideal (− em cima)', curto: 'Amp-op ideal', grupo: 'integrados', bipolo: false, tecla: 'a', props: { ganho: '100k', vmax: '15', vmin: '-15' },
             campos: [{ k: 'ganho', r: 'Ganho em malha aberta' }, { k: 'vmax', r: 'Saturação positiva', u: 'V' }, { k: 'vmin', r: 'Saturação negativa', u: 'V' }],
             // pinos: saída, entrada +, entrada −
             pinos: (el) => pinosPorOffsets(el, [[48, 0], [-32, 16], [-32, -16]]),
@@ -309,9 +322,10 @@
         },
         caixa: {
             icone: '▭', nome: 'Caixa SPICE (subcircuito)', curto: 'Caixa SPICE', grupo: 'integrados', bipolo: false, tecla: 'x',
-            props: { modelo: '', pinos: 'A, B, C, D', titulo: '' },
+            props: { modelo: '', pinos: 'A, B, C, D', titulo: '', simbolo: 'auto' },
             campos: [
                 { k: 'modelo', r: 'Subcircuito (.subckt)', tipo: 'subckt' },
+                { k: 'simbolo', r: 'Símbolo', tipo: 'sel', op: [['auto', 'Automático (triângulo se for amp-op)'], ['ampop', 'Amp-op (triângulo)'], ['caixa', 'Caixa retangular']] },
                 { k: 'pinos', r: 'Nomes dos pinos (em ordem, separados por vírgula)', se: (p) => !p.modelo },
                 { k: 'titulo', r: 'Título na caixa' }
             ],
@@ -322,6 +336,12 @@
             },
             geometria(el, lib) {
                 const nomes = this.nomesPinosDe(el, lib);
+                const papeis = el.props.simbolo !== 'caixa' ? papeisAmpop(nomes) : null;
+                if (papeis && (el.props.simbolo === 'ampop' || el.props.simbolo === 'auto' || !el.props.simbolo)) {
+                    // símbolo triangular da bibliografia: − em cima, + embaixo, saída na ponta, alimentações em cima/embaixo
+                    const pos = { inm: [-48, -16], inp: [-48, 16], out: [64, 0], vcc: [0, -48], vee: [0, 48] };
+                    return { ampop: true, nomes, papeis, offs: papeis.map((p) => pos[p]) };
+                }
                 const esq = Math.ceil(nomes.length / 2), dir = nomes.length - esq;
                 const linhas = Math.max(esq, dir, 1);
                 const h = (linhas + 1) * 32, w = 112;
@@ -329,9 +349,14 @@
                 return { nomes, offs, w, h, esq };
             },
             pinos(el, lib) { return pinosPorOffsets(el, this.geometria(el, lib).offs); },
-            caixa(el, lib) { const gm = this.geometria(el, lib); return caixaGirada(el, -gm.w / 2 - 16, -gm.h / 2, gm.w + 32, gm.h); },
+            caixa(el, lib) {
+                const gm = this.geometria(el, lib);
+                if (gm.ampop) return caixaGirada(el, -48, -48, 112, 96);
+                return caixaGirada(el, -gm.w / 2 - 16, -gm.h / 2, gm.w + 32, gm.h);
+            },
             desenhar(g, el, info, lib) {
                 const gm = this.geometria(el, lib);
+                if (gm.ampop) { desenhaAmpop(g, el, info, gm); return; }
                 comGiro(g, el, () => {
                     gm.offs.forEach((o, i) => {
                         const x2 = o[0] < 0 ? -gm.w / 2 : gm.w / 2;
@@ -379,6 +404,45 @@
         }
     };
 
+    /** Reconhece pinos de amp-op pelos nomes (IN+, IN−, OUT, VCC, VEE e variações). Devolve os papéis ou null. */
+    function papeisAmpop(nomes) {
+        if (nomes.length !== 5 && nomes.length !== 3) return null;
+        const papel = (n) => {
+            const u = String(n).toUpperCase().replace(/\s/g, '');
+            if (/^(IN\+|\+IN|INP|IN_P|INPUT\+|NONINV|NI|\+)$/.test(u)) return 'inp';
+            if (/^(IN-|-IN|INM|INN|IN_N|INPUT-|INV|-)$/.test(u)) return 'inm';
+            if (/^(OUT|OUTPUT|VO|VOUT|O)$/.test(u)) return 'out';
+            if (/^(VCC|V\+|VDD|VP|VS\+|VPOS|V\+S)$/.test(u)) return 'vcc';
+            if (/^(VEE|V-|VSS|VN|VS-|VNEG|V-S)$/.test(u)) return 'vee';
+            return null;
+        };
+        const p = nomes.map(papel);
+        const precisa = nomes.length === 5 ? ['inp', 'inm', 'out', 'vcc', 'vee'] : ['inp', 'inm', 'out'];
+        return precisa.every((x) => p.filter((y) => y === x).length === 1) ? p : null;
+    }
+
+    /** Amp-op com modelo SPICE desenhado com o triângulo da bibliografia. */
+    function desenhaAmpop(g, el, info, gm) {
+        const ini = { inm: [-32, -16], inp: [-32, 16], out: [48, 0], vcc: [0, -24], vee: [0, 24] };
+        comGiro(g, el, () => {
+            gm.offs.forEach((o, i) => { const f = ini[gm.papeis[i]]; terminal(g, o[0], o[1], f[0], f[1], info.cor(info.v[i])); });
+            g.fillStyle = '#fff'; g.strokeStyle = '#1d2b2b'; g.lineWidth = 2;
+            g.beginPath(); g.moveTo(-32, -40); g.lineTo(48, 0); g.lineTo(-32, 40); g.closePath(); g.fill(); g.stroke();
+            g.lineWidth = 1.6;
+            linha(g, -27, -16, -19, -16);                       // −
+            linha(g, -27, 16, -19, 16); linha(g, -23, 12, -23, 20); // +
+            g.save(); g.rotate(-(el.rot || 0) * Math.PI / 2);
+            g.fillStyle = '#085357'; g.font = 'bold 9px Segoe UI, Roboto, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
+            const t = el.props.titulo || el.props.modelo || '';
+            if (t && !(el.rot % 2)) { g.font = 'bold 8px Segoe UI, Roboto, Arial'; g.fillText(t, 2, 0, 46); } // cabe dentro do triângulo
+            g.restore();
+            if (gm.papeis.includes('vcc')) {
+                g.fillStyle = '#5f6f6d'; g.font = '9px Segoe UI, Roboto, Arial'; g.textAlign = 'left'; g.textBaseline = 'middle';
+                g.fillText('V+', 4, -36); g.fillText('V−', 4, 36);
+            }
+        });
+    }
+
     function comGiro(g, el, f) { g.save(); g.translate(el.pos[0], el.pos[1]); g.rotate((el.rot || 0) * Math.PI / 2); f(); g.restore(); }
     function caixaGirada(el, x, y, w, h) {
         const cs = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]].map((p) => girar(p, el.rot || 0));
@@ -421,7 +485,7 @@
     function transistorMOS(id, nome, tipo) {
         const pmos = tipo === 'PMOS';
         return {
-            nome, icone: pmos ? 'Mp' : 'Mn', grupo: 'semicondutores', bipolo: false, props: { modelo: '' },
+            nome, icone: pmos ? 'Mp' : 'Mn', grupo: 'semicondutores', bipolo: false, tecla: pmos ? 'P' : 'N', props: { modelo: '' },
             campos: [{ k: 'modelo', r: 'Modelo SPICE', tipo: 'modelo', tipos: [tipo] }],
             // pinos: dreno, porta, fonte (corpo ligado à fonte)
             pinos: (el) => pinosPorOffsets(el, [[16, -32], [-32, 0], [16, 32]]),

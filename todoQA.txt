@@ -4,7 +4,7 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 
 === DIRETRIZES PERMANENTES
 - Mesma identidade visual da Central de Aplicativos, QFD, Projeto Conceitual, Gestão de Projetos e Supervisório MQTT (cores, topo, menu lateral, rodapé).
-- Usabilidade do simulador do Prof. Falstad, mas código próprio: não copiar código do circuitjs1 (GPL) para manter o projeto proprietário.
+- Manter os atalhos de teclado e o uso do mouse do Falstad (README). Usabilidade do simulador do Prof. Falstad, mas código próprio: não copiar código do circuitjs1 (GPL) para manter o projeto proprietário.
 - 100% no navegador, sem servidor. Sem CDN: biblioteca de terceiros entra copiada em vendor/ com a licença dela.
 - Modelos SPICE: pasta modelos/ (+ indice.json via node tests/gerar-embutidos.js), pasta do usuário, arquivos ou texto colado.
 - Componente sem modelo = Caixa SPICE com pinos nomeados; ao escolher o .subckt, os pinos vêm do modelo.
@@ -20,6 +20,8 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 5 [resolvido 18/11/2026] Biblioteca SPICE: pasta (com subpastas), arquivos, texto colado, pasta modelos/ do repositório; busca por nome, tipo, arquivo e pino; "Usar" no selecionado ou cria componente.
 6 [resolvido 18/11/2026] Caixa SPICE (subcircuito) com pinos nomeados; expansão de .subckt aninhados; marca o que o tempo real não roda.
 7 [resolvido 18/11/2026] Exportar netlist SPICE (.cir) com modelos e subcircuitos usados; salvar/abrir .json; guarda no navegador.
+18 [resolvido 18/11/2026] Amp-op com modelo SPICE desenhado com o triângulo da bibliografia (− em cima, + embaixo, V+/V− em cima/embaixo); reconhece os pinos pelos nomes; opção de caixa retangular.
+19 [resolvido 18/11/2026] Atalhos do teclado do Falstad (w r c L s v V g d z l a n p N P, Esc/Espaço, Delete, setas, Ctrl+Z/Y/C/X/V/D/A/S/O, + − 0, /), seleção por área, Shift+clique, Alt/direito movem a vista, Ctrl+arrastar ponta. Fonte de corrente ficou sem tecla (no Falstad o i é entrada lógica).
 8 [resolvido 18/11/2026] Biblioteca de exemplo (modelos/basicos.lib) e 5 exemplos: RC, retificador, LED, emissor comum, amp-op inversor com .subckt.
 
 === O QUE FALTA
@@ -34,7 +36,7 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
 
 === QA (18/11/2026)
-- node tests/testes.js: 25 de 25 passaram (divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- node tests/testes.js: 26 de 26 passaram (símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
 - Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
   "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

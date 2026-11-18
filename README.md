@@ -12,11 +12,15 @@ HTML, CSS e JavaScript puros, sem servidor e sem bibliotecas externas.
 
 - **Editor no estilo do Falstad:** arraste na grade para pôr componentes; cores pela tensão; pontos andando com a corrente;
   clique na chave para abrir/fechar; passe o mouse para ver tensão, corrente e potência; desfazer/refazer; zoom e arrastar a vista.
+- **Atalhos do teclado do Falstad:** `w` fio, `r` resistor, `c` capacitor, `L` indutor, `s` chave, `v` fonte, `V` fonte de
+  1 terminal, `g` terra, `d` diodo, `z` zener, `l` LED, `a` amp-op, `n`/`p` NPN/PNP, `N`/`P` MOSFET, `Esc`/`Espaço`
+  selecionar, `Delete`, setas, `Ctrl+Z/Y/C/X/V/D/A/S/O`, `+`/`−`/`0` zoom, `/` busca; seleção por área, `Shift`+clique,
+  `Alt`/botão direito para mover a vista, `Ctrl`+arrastar para esticar a ponta. Extras do app: `x` Caixa SPICE, `m` voltímetro, `Shift+R` girar.
 - **Simulação ativa em tempo real**, com velocidades programadas (tempo real, 0,1×, 0,01×, 0,001×, 0,0001×, máxima), passo de
   tempo ajustável, pausar, avançar um passo e reiniciar.
 - **Osciloscópio** com até 4 traços (tensão ou corrente de qualquer componente), escala automática e base de tempo ajustável.
 - **Componentes:** fio, resistor, capacitor, indutor, chave, fonte de tensão (contínua, senoidal, quadrada), trilho +V, fonte de
-  corrente, terra, diodo, LED (acende com a corrente), NPN, PNP, MOSFET N e P, amp-op ideal, Caixa SPICE e voltímetro.
+  corrente, terra, diodo, zener, LED (acende com a corrente), NPN, PNP, MOSFET N e P, amp-op ideal, Caixa SPICE (amp-op com o triângulo da bibliografia) e voltímetro.
 - **Modelos SPICE de verdade no tempo real:** diodo (IS, N, RS, BV, IBV), BJT (IS, BF, BR, NF, NR, VAF), MOSFET nível 1
   (VTO, KP, LAMBDA) e subcircuitos com R, C, L, V, I, E, G, F, H, D, Q, M e X.
 - **Biblioteca SPICE pesquisável:** abra uma pasta de modelos (lê as subpastas), arquivos soltos ou cole o texto; busca por nome,
@@ -38,7 +42,7 @@ Para modelos só seus, sem publicar: botão **📁 Abrir pasta de modelos** no p
 
 ## Testes
 
-`node tests/testes.js` (25 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
+`node tests/testes.js` (26 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
 
 ## Arquivos
 

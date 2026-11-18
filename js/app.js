@@ -78,7 +78,7 @@
 
         // ------------------------------------------------------------ circuito
         novoId(tipo) {
-            const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', led: 'LED', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' }[tipo] || 'E';
+            const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' }[tipo] || 'E';
             let n = 1;
             const usados = new Set(this.ed.els.map((e) => e.id));
             while (usados.has(letra + n)) n++;
@@ -93,6 +93,7 @@
         excluir(id) {
             this.ed.els = this.ed.els.filter((e) => e.id !== id);
             this.osc = this.osc.filter((o) => o.el !== id);
+            this.ed.sels.delete(id);
             if (this.ed.sel === id) { this.ed.sel = null; this.selecionou(null); }
             this.mudouTopologia();
         },
@@ -105,7 +106,7 @@
             if (!lista.length) return;
             outra.push(JSON.stringify(this.ed.els));
             this.ed.els = JSON.parse(lista.pop());
-            this.ed.sel = null; this.selecionou(null);
+            this.ed.selecionarSo(null); this.selecionou(null);
             this.mudouTopologia();
         },
         mudouTopologia() { this.reconstruir(); this.guardar(); },
@@ -318,7 +319,12 @@
                 case 'abrir': $('#abrir-json').click(); break;
                 case 'exportar-spice': this.baixar('circuito.cir', Circ.exportarSpice(this.ed.els, this.lib, { passo: String(this.dt), tempo: String(Math.max(this.dt * 2000, 0.02)) }), 'text/plain'); break;
                 case 'girar': if (sel && !C.DEFS[sel.tipo].bipolo) { this.antes(); sel.rot = ((sel.rot || 0) + 1) % 4; this.mudouTopologia(); } else if (sel) { this.antes(); sel.p.reverse(); this.mudouTopologia(); } break;
-                case 'excluir': if (sel) { this.antes(); this.excluir(sel.id); } break;
+                case 'excluir': this.excluirSelecao(); break;
+                case 'copiar': this.copiar(); break;
+                case 'recortar': if (this.copiar()) this.excluirSelecao(); break;
+                case 'colar': this.colar(); break;
+                case 'duplicar': if (this.copiar()) this.colar(); break;
+                case 'tudo': this.ed.sels = new Set(this.ed.els.map((e) => e.id)); this.ed.sel = null; this.selecionou(null); break;
                 case 'osc-v': if (sel) this.adicionarOsc(sel, 'V'); break;
                 case 'osc-i': if (sel) this.adicionarOsc(sel, 'I'); break;
                 case 'osc-limpar': this.osc = []; this.listarOsc(); break;
@@ -331,12 +337,57 @@
             }
         },
 
+        excluirSelecao() {
+            const ids = [...this.ed.sels];
+            if (!ids.length) return;
+            this.antes();
+            this.ed.els = this.ed.els.filter((e) => !this.ed.sels.has(e.id));
+            this.osc = this.osc.filter((o) => !this.ed.sels.has(o.el)); this.listarOsc();
+            this.ed.selecionarSo(null); this.selecionou(null);
+            this.mudouTopologia();
+        },
+        copiar() {
+            const els = this.ed.selecionados();
+            if (!els.length) return false;
+            this.area = { els: JSON.parse(JSON.stringify(els)), vezes: 0 };
+            try { navigator.clipboard && navigator.clipboard.writeText(JSON.stringify({ formato: 'simulador-falstad-spice', els: this.area.els })).catch(() => {}); } catch (e) { /* sem área de transferência */ }
+            this.aviso(`${els.length} componente(s) copiado(s).`);
+            return true;
+        },
+        colar() {
+            if (!this.area || !this.area.els.length) return;
+            this.antes();
+            this.area.vezes++;
+            const d = 2 * C.GRADE * this.area.vezes;
+            const novos = this.area.els.map((e) => {
+                const c = JSON.parse(JSON.stringify(e));
+                c.id = this.novoId(c.tipo);
+                this.ed.els.push(c); // já entra na lista para o próximo id não repetir
+                return c;
+            });
+            this.ed.deslocar(novos, d, d);
+            this.ed.sels = new Set(novos.map((e) => e.id)); this.ed.sel = novos.length === 1 ? novos[0].id : null;
+            this.selecionou(this.ed.selecionado());
+            this.mudouTopologia();
+        },
+        moverSelecao(dx, dy) {
+            const els = this.ed.selecionados();
+            if (!els.length) return;
+            this.antes(); this.ed.deslocar(els, dx, dy); this.mudouTopologia();
+        },
+
         selecionou(el, focar) {
             this.mostrarPropriedades(el);
             if (focar && el) $('#painel-prop').scrollIntoView({ block: 'nearest' });
         },
         mostrarPropriedades(el) {
             const box = $('#prop');
+            const n = this.ed ? this.ed.sels.size : 0;
+            if (n > 1) {
+                box.innerHTML = `<p><b>${n} componentes selecionados</b></p><p class="muted">Arraste um deles para mover todos; setas movem na grade. Ctrl+C copia, Ctrl+D duplica, Delete apaga.</p>
+                    <div class="prop-botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="duplicar">⧉ Duplicar</button><button type="button" class="btn btn-secondary btn-sm btn-perigo" data-acao="excluir">🗑 Excluir</button></div>`;
+                return;
+            }
             if (!el) { box.innerHTML = '<p class="muted">Clique num componente para ver e editar os valores. Duplo clique também abre aqui.</p>'; return; }
             const d = C.DEFS[el.tipo];
             const campos = (d.campos || []).filter((c) => !c.se || c.se(el.props));
@@ -467,18 +518,18 @@
                 if (sel && sel.tipo === 'caixa') { sel.props.modelo = nome; this.mudouValor(sel); return; }
                 const el = this.novo('caixa', { pos: this.ed.centro(), rot: 0 });
                 el.props.modelo = nome;
-                this.ed.sel = el.id; this.selecionou(el); this.mudouTopologia();
+                this.ed.selecionarSo(el); this.selecionou(el); this.mudouTopologia();
                 this.aviso(`Caixa ${el.id} criada com ${nome}: arraste para o lugar e ligue os pinos.`);
                 return;
             }
             const m = this.lib.modelo(nome);
-            const tipoEl = { D: ['diodo', 'led'], NPN: ['npn'], PNP: ['pnp'], NMOS: ['nmos'], PMOS: ['pmos'] }[m.tipo];
+            const tipoEl = { D: ['diodo', 'led', 'zener'], NPN: ['npn'], PNP: ['pnp'], NMOS: ['nmos'], PMOS: ['pmos'] }[m.tipo];
             if (!tipoEl) { this.aviso(`O modelo ${nome} (${m.tipo}) ainda não tem componente no tempo real.`); return; }
             if (sel && tipoEl.includes(sel.tipo)) { sel.props.modelo = nome; this.mudouValor(sel); return; }
             const c = this.ed.centro();
             const el = C.DEFS[tipoEl[0]].bipolo ? this.novo(tipoEl[0], { p: [c, [c[0] + 64, c[1]]] }) : this.novo(tipoEl[0], { pos: c, rot: 0 });
             el.props.modelo = nome;
-            this.ed.sel = el.id; this.selecionou(el); this.mudouTopologia();
+            this.ed.selecionarSo(el); this.selecionou(el); this.mudouTopologia();
         },
 
         // ------------------------------------------------------------ arquivos
@@ -493,7 +544,7 @@
             $('#passo').value = S.formatar(this.dt, 's').replace(/ /g, '');
             $('#velocidade').value = this.velocidade;
             $('#osc-n').value = String(this.oscN);
-            this.ed.sel = null; this.selecionou(null);
+            this.ed.selecionarSo(null); this.selecionou(null);
             this.reiniciar();
             this.osc = [];
             (d.osc || []).forEach((o) => { const el = this.ed.el(o.el); if (el) this.adicionarOsc(el, o.g); });
@@ -532,18 +583,27 @@
         },
 
         // ------------------------------------------------------------ teclado e menu no celular
+        /** Atalhos do teclado no padrão do simulador do Prof. Falstad (ver README). */
         ligarTeclas() {
             document.addEventListener('keydown', (ev) => {
                 if (ev.target.closest('input, select, textarea')) return;
-                const k = ev.key;
-                if ((ev.ctrlKey || ev.metaKey) && k.toLowerCase() === 'z') { ev.preventDefault(); this.voltar(ev.shiftKey ? this.refazer : this.desfazer, ev.shiftKey ? this.desfazer : this.refazer); return; }
-                if ((ev.ctrlKey || ev.metaKey) && k.toLowerCase() === 'y') { ev.preventDefault(); this.voltar(this.refazer, this.desfazer); return; }
-                if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
-                if (k === 'Escape') { this.escolherFerramenta('selecionar'); return; }
-                if (k === 'Delete' || k === 'Backspace') { const s = this.ed.selecionado(); if (s) { ev.preventDefault(); this.antes(); this.excluir(s.id); } return; }
+                const k = ev.key, ctrl = ev.ctrlKey || ev.metaKey, kl = k.toLowerCase();
+                if (ctrl) {
+                    const mapa = { z: ev.shiftKey ? 'refazer' : 'desfazer', y: 'refazer', c: 'copiar', x: 'recortar', v: 'colar', d: 'duplicar', a: 'tudo', s: 'salvar', o: 'abrir' };
+                    if (mapa[kl]) { ev.preventDefault(); this.acao(mapa[kl]); }
+                    return;
+                }
+                if (ev.altKey) return;
+                if (k === 'Escape' || k === ' ') { ev.preventDefault(); this.escolherFerramenta('selecionar'); return; }
+                if (k === 'Delete' || k === 'Backspace') { ev.preventDefault(); this.excluirSelecao(); return; }
+                const setas = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+                if (setas[k]) { ev.preventDefault(); this.moverSelecao(setas[k][0] * C.GRADE, setas[k][1] * C.GRADE); return; }
+                if (k === '+' || k === '=') { this.ed.zoom(1.25); return; }
+                if (k === '-') { this.ed.zoom(0.8); return; }
+                if (k === '0') { this.ed.zoom(1 / this.ed.vista.z); return; }
+                if (k === '/') { ev.preventDefault(); $('#bib-busca').focus(); return; }
                 if (k === 'R' && ev.shiftKey) { this.acao('girar'); return; }
-                if (k === ' ') { ev.preventDefault(); this.acao('rodar'); return; }
-                const t = Object.entries(C.DEFS).find(([, d]) => d.tecla === k);
+                const t = Object.entries(C.DEFS).find(([, d]) => d.tecla === k); // diferencia maiúscula: l = LED, L = indutor
                 if (t) this.escolherFerramenta(t[0]);
             });
             setInterval(() => this.atualizarLeitura(), 250);

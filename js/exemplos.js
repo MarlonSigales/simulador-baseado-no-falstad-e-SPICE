@@ -81,26 +81,24 @@
         },
         {
             id: 'ampop-inversor', nome: 'Amp-op inversor com modelo SPICE (subcircuito)',
-            dica: 'A caixa usa o .subckt AMPOP_GENERICO da biblioteca. Ganho = −Rf/Rin = −10.',
-            passo: 2e-6, osc: [{ el: 12, g: 'V' }, { el: 13, g: 'V' }],
+            dica: 'O amp-op usa o .subckt AMPOP_GENERICO da biblioteca (desenhado com o triângulo). Ganho = −Rf/Rin = −10.',
+            passo: 2e-6, osc: [{ el: 11, g: 'V' }, { el: 12, g: 'V' }],
             els: [
-                u('caixa', 320, 192, 0, { modelo: 'AMPOP_GENERICO', pinos: '', titulo: '' }),
-                b('fio', 248, 224, 248, 272),
-                u('trilho', 248, 272, 2, { forma: 'dc', V: '15' }),
-                b('fio', 392, 160, 392, 112),
-                u('trilho', 392, 112, 0, { forma: 'dc', V: '-15' }),
-                b('fio', 248, 160, 232, 160),
-                u('terra', 232, 160),
-                b('resistor', 104, 192, 200, 192, { R: '1k' }),
-                b('fio', 200, 192, 248, 192),
-                b('fio', 200, 192, 200, 48),
-                b('resistor', 200, 48, 456, 48, { R: '10k' }),
-                b('fio', 456, 48, 456, 192),
-                b('fonteV', 104, 288, 104, 192, { forma: 'seno', V: '0', amplitude: '1', freq: '1k', offset: '0', fase: '0', duty: '0.5' }),
-                b('resistor', 456, 192, 456, 288, { R: '10k' }),
-                b('fio', 392, 192, 456, 192),
-                u('terra', 104, 288),
-                u('terra', 456, 288)
+                u('caixa', 320, 192, 0, { modelo: 'AMPOP_GENERICO', pinos: '', titulo: '', simbolo: 'auto' }),
+                u('trilho', 320, 144, 0, { forma: 'dc', V: '15' }),
+                u('trilho', 320, 240, 2, { forma: 'dc', V: '-15' }),
+                b('fio', 272, 208, 240, 208),
+                u('terra', 240, 208),
+                b('resistor', 112, 176, 208, 176, { R: '1k' }),
+                b('fio', 208, 176, 272, 176),
+                b('fio', 208, 176, 208, 64),
+                b('resistor', 208, 64, 432, 64, { R: '10k' }),
+                b('fio', 432, 64, 432, 192),
+                b('fio', 384, 192, 432, 192),
+                b('fonteV', 112, 272, 112, 176, { forma: 'seno', V: '0', amplitude: '1', freq: '1k', offset: '0', fase: '0', duty: '0.5' }),
+                b('resistor', 432, 192, 432, 288, { R: '10k' }),
+                u('terra', 112, 272),
+                u('terra', 432, 288)
             ]
         }
     ];
@@ -108,7 +106,7 @@
     /** Dá ids no estilo do SPICE (R1, C1, ...) a uma lista de elementos sem id. */
     function comIds(els) {
         const cont = {};
-        const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', led: 'LED', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' };
+        const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' };
         return els.map((e) => {
             const l = letra[e.tipo] || 'E';
             cont[l] = (cont[l] || 0) + 1;
