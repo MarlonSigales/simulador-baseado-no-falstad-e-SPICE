@@ -37,9 +37,14 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 8 [resolvido 18/11/2026] Biblioteca de exemplo (modelos/basicos.lib) e 5 exemplos: RC, retificador, LED, emissor comum, amp-op inversor com .subckt.
 
 === O QUE FALTA
-9  [fazer] Bloco Microcontrolador (firmware em C), etapa 1: bloco com pinos (GPIO/ADC/PWM) e HAL em JS ligada ao motor (ver ARQUITETURA.md, seção 4).
-10 [fazer] Microcontrolador, modo A: C compilado no navegador para WebAssembly (clang em vendor/), firmware num Web Worker sincronizado com o tempo simulado.
-11 [fazer] Microcontrolador, modo B: emulação do ATmega328P (avr8js, MIT) rodando .hex do Arduino; depois RP2040 (rp2040js).
+9  [resolvido 18/11/2026] Bloco Microcontrolador: pinos viram primitivos PINO no motor (saída = fonte com Rout; entrada = alta impedância com pull-up),
+   HAL estilo Arduino (pinMode, digitalWrite/Read, analogRead 10 bits, analogWrite = PWM 490 Hz, delay, millis, micros, map, constrain, random, printf → monitor serial).
+10 [resolvido 18/11/2026] Modo A (firmware em C): interpretado no navegador pelo JSCPP (vendor/jscpp, MIT, 390 kB) passo a passo junto com o tempo simulado.
+   Troquei o clang em WebAssembly (~30 MB) pelo interpretador: carrega na hora, mostra o erro com a linha e já sincroniza com o motor.
+   Limite: o JSCPP aceita a maior parte do C, mas não tudo (structs complexas, bibliotecas do Arduino em C++). Editor de firmware com Ctrl+Enter.
+11 [resolvido 18/11/2026] Modo B: Arduino Uno (ATmega328P) emulado pelo avr8js (vendor/avr8js, MIT) com GPIO, timers 0/1/2, USART (monitor serial) e ADC,
+   rodando o .hex do Arduino IDE; exemplo pisca-d13.hex montado à mão em tests/gerar-hex-pisca.js.
+26 [futuro] RP2040 (rp2040js) e compilar o sketch .ino no navegador (avr-gcc em WebAssembly) para o Uno.
 12 [fazer] ngspice em WebAssembly (vendor/, Web Worker): .op sobre o desenho, Bode (.ac), curva DC, ruído, Fourier/THD, .step, temperatura, Monte Carlo.
 13 [resolvido 18/11/2026] Capacitâncias de junção (CJO, CJE, CJC) e resistências série no tempo real, como capacitores lineares (falta a dependência com a tensão e TT).
 14 [resolvido 18/11/2026] Mais componentes (js/componentes-extra.js): potenciômetro (roda do mouse gira o cursor), eletrolítico (C), chave de 2 posições (S),
@@ -51,7 +56,7 @@ Atualizado em 18/11/2026 (versão 0.1). Os números são fixos (servem de refer�
 17 [futuro] Gamificação igual à da Central (missões e medalhas), se o usuário quiser.
 
 === QA (18/11/2026)
-- node tests/testes.js: 46 de 46 passaram (potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
+- node tests/testes.js: 51 de 51 passaram (microcontrolador: pisca no tempo simulado com A0, PWM no RC, erro com a linha, pull-up, Arduino Uno com .hex; potenciômetro, transformador, lâmpada, relé, portas, rótulos, PWL, amperímetro e chave 2 posições; não idealidades: fonte com Rint, ESR, fuga, DCR, Ron/Roff, voltímetro, RS do diodo, offset, slew rate e GBW do amp-op, netlist; símbolo do amp-op, divisor, RC, RL, LC, diodo, zener, BJT NPN/PNP, MOSFET N/P, E/G/F/H, fontes, erro de circuito, biblioteca, Caixa SPICE, 5 exemplos, netlist).
 - Playwright em 360, 768, 1024 e 1920 px: sem estouro horizontal e sem erro de JavaScript; os 5 exemplos rodam sem erro.
 - Playwright: clique na chave do RC carrega o capacitor; resistor desenhado por tecla + arrasto; Caixa SPICE sem modelo avisa;
   "Usar" REG_5V vira 3 pinos; colar .model aumenta a biblioteca; netlist baixado com .subckt; Ctrl+Z desfaz.

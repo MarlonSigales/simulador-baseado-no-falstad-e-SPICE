@@ -399,6 +399,56 @@ teste('Amperímetro e chave de 2 posições', () => {
     perto(mk('A'), 0, 1e-9, 'posição A');
 });
 
+
+// ---------------------------------------------------------------- microcontrolador
+const MCU = require('../js/mcu.js');
+function simMCU(id, T) {
+    const ex = EXEMPLOS.find((e) => e.id === id), els = comIds(ex.els), net = Circuito.construir(els, lib()), m = new Motor(net), g = new MCU.Gerente();
+    g.sincronizar(els); m.aoPasso = (mm) => g.passo(mm, net, mm.dtUlt);
+    return { els, net, m, g, rodar: (t, f) => { const n = Math.round(t / ex.passo); for (let i = 0; i < n; i++) { m.passo(ex.passo); if (f) f(m); } } };
+}
+
+teste('Microcontrolador (C): pisca o LED no tempo simulado e lê A0', () => {
+    const s = simMCU('mcu-pisca');
+    const led = s.els.find((e) => e.tipo === 'led');
+    const trocas = []; let ant = null;
+    s.rodar(1.2, (m) => { const on = m.prim(s.net.primDe[led.id]).i > 1e-3; if (on !== ant) { trocas.push(m.t); ant = on; } });
+    const st = s.g.estado('MCU1');
+    ok(!st.erro, st.erro); ok(/Firmware iniciado/.test(st.serial), 'printf no monitor serial');
+    // potenciômetro em 30 % de 5 V → A0 ≈ 307 → meio período = 100 + 307/4 ≈ 176 ms
+    const meio = trocas[3] - trocas[2];
+    perto(meio, 0.176, 0.01, 'meio período');
+});
+
+teste('Microcontrolador (C): PWM no filtro RC dá a média', () => {
+    const s = simMCU('mcu-pwm');
+    s.rodar(0.075); // 1º ciclo (0–40 ms) é 0; depois 16/255
+    const vc = s.m.v(s.net.pinos.C1[0]);
+    ok(vc > 0.1 && vc < 1.5, `Vc = ${vc} (ciclo 16/255 → ~0,31 V)`);
+});
+
+teste('Microcontrolador (C): erro de compilação vira mensagem com a linha do usuário', () => {
+    const f = new MCU.FirmwareC('void setup() {\n  int x = ;\n}\nvoid loop() {}\n', { vdd: 5, ips: 1e6 });
+    ok(f.erro && /linha 2/.test(f.erro), f.erro);
+});
+
+teste('Microcontrolador (C): digitalRead com INPUT_PULLUP e botão', () => {
+    const f = new MCU.FirmwareC('int estado = 0;\nvoid setup() { pinMode(2, INPUT_PULLUP); pinMode(13, OUTPUT); }\nvoid loop() { estado = digitalRead(2); digitalWrite(13, estado); delay(1); }\n', { vdd: 5, ips: 1e6 });
+    ok(!f.erro, f.erro);
+    f.lerTensao = () => 0; for (let i = 0; i < 100; i++) f.avancar(i * 1e-4, 1e-4);
+    ok(f.saida(2).modo === 'pullup' && f.saida(13).alto === false, 'botão apertado (0 V) → LED apagado');
+    f.lerTensao = () => 5; for (let i = 100; i < 200; i++) f.avancar(i * 1e-4, 1e-4);
+    ok(f.saida(13).alto === true, 'botão solto → LED aceso');
+});
+
+teste('Arduino Uno emulado: o .hex pisca o D13 a cada ~0,26 s', () => {
+    const s = simMCU('arduino-hex');
+    const trocas = []; let ant = null;
+    s.rodar(0.6, (m) => { const v = m.v(s.net.pinos.R1[0]) > 2.5; if (v !== ant) { trocas.push(m.t); ant = v; } });
+    ok(!s.g.estado('UNO1').erro, s.g.estado('UNO1').erro);
+    perto(trocas[2] - trocas[1], 0.258, 0.01, 'meio período');
+});
+
 // ---------------------------------------------------------------- exemplos
 function simularExemplo(id, T, chaveFechada) {
     const ex = EXEMPLOS.find((e) => e.id === id);

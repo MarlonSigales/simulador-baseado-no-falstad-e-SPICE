@@ -126,3 +126,19 @@ body.area-grande .sim-tela { height: calc(100vh - 170px); }
   .sim-barra { gap: 0.4rem 0.5rem; }
   .osc-tela { height: 160px; }
 }
+
+/* microcontrolador */
+.serial { background: #0d2b2c; color: #a8e156; font: 0.78rem/1.35 Consolas, monospace; padding: 0.4rem 0.5rem; border-radius: 6px; max-height: 140px; min-height: 2.6rem; overflow: auto; white-space: pre-wrap; margin: 0; }
+.dlg-firmware { width: min(1000px, 96vw); max-height: 92vh; border: 0; border-radius: 10px; padding: 0.9rem 1rem; box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.dlg-firmware::backdrop { background: rgba(8, 40, 42, .45); }
+.fw-topo { display: flex; justify-content: space-between; align-items: center; }
+.fw-topo h2 { margin: 0; color: var(--teal); font-size: 1.1rem; }
+.fw-corpo { display: grid; grid-template-columns: minmax(0, 1fr) 270px; gap: 0.8rem; margin-top: 0.6rem; }
+#fw-codigo { width: 100%; height: min(60vh, 520px); font: 0.85rem/1.45 Consolas, 'Courier New', monospace; padding: 0.6rem; border: 1px solid var(--borda); border-radius: 6px; resize: vertical; tab-size: 2; color: #e8f3ef; background: #0d2b2c; }
+.fw-ajuda { font-size: 0.82rem; }
+.fw-ajuda ul { padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.2rem; }
+.fw-msg { min-height: 1.3rem; margin: 0.5rem 0; font-size: 0.85rem; }
+.fw-msg.erro { color: var(--perigo); font-weight: 600; white-space: pre-wrap; }
+.fw-msg.ok { color: var(--verde-escuro); font-weight: 600; }
+.fw-botoes { display: flex; gap: 0.4rem; justify-content: flex-end; }
+@media (max-width: 760px) { .fw-corpo { grid-template-columns: 1fr; } #fw-codigo { height: 45vh; } }

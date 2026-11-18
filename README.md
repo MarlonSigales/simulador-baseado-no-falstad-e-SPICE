@@ -32,8 +32,10 @@ HTML, CSS e JavaScript puros, sem servidor e sem bibliotecas externas.
 - **Netlist SPICE (.cir)** para rodar no ngspice ou LTspice, com os modelos e subcircuitos usados.
 - Salvar e abrir circuitos (.json); o circuito e a biblioteca ficam guardados no navegador.
 
-Próximas etapas (ver `ARQUITETURA.md` e `todoQA.txt`): análises do ngspice em WebAssembly (.op, .ac, .dc, ruído, Fourier,
-.step, Monte Carlo) e o **bloco Microcontrolador** que roda firmware em C.
+- **Microcontrolador** (tecla `u`): firmware em C no estilo Arduino (setup/loop, digitalWrite, analogRead, PWM, delay, printf)
+  rodando junto com o tempo simulado, com editor e monitor serial; e **Arduino Uno emulado** (ATmega328P) rodando o .hex do Arduino IDE.
+
+Próximas etapas (ver `ARQUITETURA.md` e `todoQA.txt`): análises do ngspice em WebAssembly (.op, .ac, .dc, ruído, Fourier, .step, Monte Carlo).
 
 ## Pôr modelos na pasta do repositório
 
@@ -45,7 +47,7 @@ Para modelos só seus, sem publicar: botão **📁 Abrir pasta de modelos** no p
 
 ## Testes
 
-`node tests/testes.js` (46 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
+`node tests/testes.js` (51 testes: motor contra a teoria, leitor SPICE, biblioteca, Caixa SPICE, exemplos e netlist).
 
 ## Arquivos
 
@@ -61,7 +63,9 @@ js/circuito.js           desenho → nós → primitivos; exportação do netlis
 js/biblioteca.js         biblioteca de modelos e busca
 js/editor.js             editor no canvas
 js/app.js                controles, osciloscópio, propriedades, biblioteca, arquivos
+js/mcu.js                microcontrolador (firmware C e Arduino Uno emulado)
 js/exemplos.js           circuitos de exemplo
+vendor/                  JSCPP e avr8js (MIT), com as licenças
 js/modelos-embutidos.js  cópia de modelos/*.lib (para abrir do disco)
 modelos/                 pasta de modelos SPICE (+ indice.json)
 tests/                   testes e gerador dos modelos embutidos

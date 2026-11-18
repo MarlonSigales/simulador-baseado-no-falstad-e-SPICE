@@ -101,13 +101,69 @@
                 u('terra', 432, 288)
             ]
         }
+        ,
+        {
+            id: 'mcu-pisca', nome: 'Microcontrolador (C): pisca LED e lê potenciômetro',
+            dica: 'Selecione o μC e clique em "Editar o firmware". Gire o potenciômetro (roda do mouse em cima dele) e o LED pisca mais devagar.',
+            passo: 50e-6, velocidade: '0.1', osc: [{ el: 1, g: 'V' }],
+            els: [
+                u('mcu', 320, 192, 0, null),
+                b('resistor', 384, 160, 544, 160, { R: '330' }),
+                b('led', 544, 160, 544, 240, { modelo: '', cor: 'vermelho', ajustes: '' }),
+                u('terra', 544, 240),
+                b('fio', 384, 176, 448, 176),
+                b('fio', 448, 176, 448, 256),
+                u('potenciometro', 448, 288, 0, { R: '10k', pos: '0.3' }),
+                u('terra', 400, 288),
+                u('trilho', 496, 288, 0, { forma: 'dc', V: '5' })
+            ]
+        },
+        {
+            id: 'mcu-pwm', nome: 'Microcontrolador (C): PWM com filtro RC',
+            dica: 'analogWrite() gera PWM de 490 Hz no D9; o filtro RC tira a média. Veja no osciloscópio o PWM e a tensão no capacitor.',
+            passo: 20e-6, velocidade: '0.1', osc: [{ el: 1, g: 'V' }, { el: 2, g: 'V' }],
+            els: [
+                u('mcu', 320, 192, 0, { firmware: `// Rampa de PWM no pino 9 (analogWrite = PWM de 490 Hz, 0 a 255)
+int ciclo = 0;
+
+void setup() {
+  pinMode(9, OUTPUT);
+}
+
+void loop() {
+  analogWrite(9, ciclo);
+  ciclo = ciclo + 16;
+  if (ciclo > 255) ciclo = 0;
+  delay(40);
+}
+` }),
+                b('resistor', 256, 240, 160, 240, { R: '1k' }),
+                b('capacitor', 160, 240, 160, 320, { C: '10u' }),
+                u('terra', 160, 320)
+            ]
+        },
+        {
+            id: 'arduino-hex', nome: 'Arduino Uno emulado (ATmega328P) rodando um .hex',
+            dica: 'O Uno roda o .hex instrução por instrução (16 MHz). Selecione-o e use "Abrir .hex" para carregar o seu, exportado pelo Arduino IDE.',
+            passo: 20e-6, velocidade: '0.1', osc: [],
+            els: [
+                u('arduino', 320, 224, 0, { hexExemplo: true }),
+                b('resistor', 384, 200, 512, 200, { R: '330' }),
+                b('led', 512, 200, 512, 288, { modelo: '', cor: 'verde', ajustes: '' }),
+                u('terra', 512, 288)
+            ]
+        }
     ];
 
     /** Dá ids no estilo do SPICE (R1, C1, ...) a uma lista de elementos sem id. */
     function comIds(els) {
         const cont = {};
-        const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', potenciometro: 'P', eletrolitico: 'C', chave2: 'S', transformador: 'T', lampada: 'LP', rele: 'K', amperimetro: 'AM', entradaLogica: 'IN', saidaLogica: 'OUT', rotuloNo: 'LBL', texto: 'TXT', porta_not: 'U', porta_and: 'U', porta_nand: 'U', porta_or: 'U', porta_nor: 'U', porta_xor: 'U', porta_xnor: 'U', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' };
-        return els.map((e) => {
+        const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', mcu: 'MCU', arduino: 'UNO', potenciometro: 'P', eletrolitico: 'C', chave2: 'S', transformador: 'T', lampada: 'LP', rele: 'K', amperimetro: 'AM', entradaLogica: 'IN', saidaLogica: 'OUT', rotuloNo: 'LBL', texto: 'TXT', porta_not: 'U', porta_and: 'U', porta_nand: 'U', porta_or: 'U', porta_nor: 'U', porta_xor: 'U', porta_xnor: 'U', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' };
+        const C = (typeof module !== 'undefined' && module.exports) ? require('./componentes.js') : raiz.Componentes;
+        const M = (typeof module !== 'undefined' && module.exports) ? require('./mcu.js') : raiz.MCU;
+        return els.map((e0) => {
+            const e = Object.assign({}, e0, { props: Object.assign({}, (C && C.DEFS[e0.tipo] && C.DEFS[e0.tipo].props) || {}, e0.props || {}) });
+            if (e.props.hexExemplo && M) { e.props.hex = M.HEX_PISCA; e.props.nomeHex = 'pisca-d13.hex (exemplo)'; delete e.props.hexExemplo; }
             const l = letra[e.tipo] || 'E';
             cont[l] = (cont[l] || 0) + 1;
             return Object.assign(JSON.parse(JSON.stringify(e)), { id: e.id || l + cont[l] });

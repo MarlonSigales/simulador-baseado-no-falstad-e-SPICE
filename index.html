@@ -8,8 +8,8 @@
     <meta name="description" content="Simulador de circuitos em tempo real no navegador, com a usabilidade do simulador do Prof. Falstad e modelos SPICE (.model e .subckt) para os componentes.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
-    <link rel="stylesheet" href="css/style.css?v=20261118b">
-    <link rel="stylesheet" href="css/simulador.css?v=20261118b">
+    <link rel="stylesheet" href="css/style.css?v=20261118c">
+    <link rel="stylesheet" href="css/simulador.css?v=20261118c">
 </head>
 <body>
     <header class="topbar">
@@ -35,6 +35,7 @@
                     <button type="button" class="sidebar-btn2" data-acao="novo">✚ Novo</button>
                 </div>
                 <input type="file" id="abrir-json" accept=".json,application/json" hidden>
+                <input type="file" id="abrir-hex" accept=".hex,.ihx,text/plain" hidden>
             </div>
         </aside>
         <div class="sidebar-fundo"></div>
@@ -188,15 +189,41 @@
 
     <div class="aviso-flutuante" id="aviso" role="status" aria-live="polite"></div>
 
-    <script src="js/spice.js?v=20261118b"></script>
-    <script src="js/motor.js?v=20261118b"></script>
-    <script src="js/componentes-extra.js?v=20261118b"></script>
-    <script src="js/componentes.js?v=20261118b"></script>
-    <script src="js/biblioteca.js?v=20261118b"></script>
-    <script src="js/circuito.js?v=20261118b"></script>
-    <script src="js/modelos-embutidos.js?v=20261118b"></script>
-    <script src="js/exemplos.js?v=20261118b"></script>
-    <script src="js/editor.js?v=20261118b"></script>
-    <script src="js/app.js?v=20261118b"></script>
+    <dialog id="dlg-firmware" class="dlg-firmware" aria-labelledby="fw-titulo">
+        <div class="fw-topo"><h2 id="fw-titulo">Firmware</h2><button type="button" class="link-botao" data-acao="firmware-fechar" aria-label="Fechar">✕</button></div>
+        <div class="fw-corpo">
+            <textarea id="fw-codigo" spellcheck="false" aria-label="Código C do firmware"></textarea>
+            <aside class="fw-ajuda">
+                <b>C no estilo Arduino</b>
+                <p>Escreva <code>setup()</code> e <code>loop()</code> (ou um <code>main()</code> seu). O firmware anda junto com o tempo simulado: <code>delay()</code> espera o tempo da simulação.</p>
+                <ul>
+                    <li><code>pinMode(p, OUTPUT | INPUT | INPUT_PULLUP)</code></li>
+                    <li><code>digitalWrite(p, HIGH | LOW)</code>, <code>digitalRead(p)</code></li>
+                    <li><code>analogRead(A0)</code> → 0 a 1023</li>
+                    <li><code>analogWrite(p, 0–255)</code> → PWM 490 Hz</li>
+                    <li><code>delay(ms)</code>, <code>delayMicroseconds(us)</code>, <code>millis()</code>, <code>micros()</code></li>
+                    <li><code>map()</code>, <code>constrain()</code>, <code>random(a, b)</code>, <code>printf()</code> → monitor serial</li>
+                    <li>Pinos: 2–13 = D2–D13; A0–A5 = 14–19</li>
+                </ul>
+                <p class="muted">Interpretador JSCPP: aceita a maior parte do C (int, double, vetores, laços, funções, ponteiros simples). Ctrl+Enter carrega.</p>
+            </aside>
+        </div>
+        <p class="fw-msg" id="fw-msg"></p>
+        <div class="fw-botoes"><button type="button" class="btn btn-primary btn-sm" data-acao="firmware-carregar">▶ Carregar no microcontrolador</button><button type="button" class="btn btn-secondary btn-sm" data-acao="firmware-fechar">Fechar</button></div>
+    </dialog>
+
+    <script src="js/spice.js?v=20261118c"></script>
+    <script src="js/motor.js?v=20261118c"></script>
+    <script src="js/componentes-extra.js?v=20261118c"></script>
+    <script src="js/componentes.js?v=20261118c"></script>
+    <script src="vendor/jscpp/jscpp.min.js?v=20261118c"></script>
+    <script src="vendor/avr8js/avr8js.min.js?v=20261118c"></script>
+    <script src="js/mcu.js?v=20261118c"></script>
+    <script src="js/biblioteca.js?v=20261118c"></script>
+    <script src="js/circuito.js?v=20261118c"></script>
+    <script src="js/modelos-embutidos.js?v=20261118c"></script>
+    <script src="js/exemplos.js?v=20261118c"></script>
+    <script src="js/editor.js?v=20261118c"></script>
+    <script src="js/app.js?v=20261118c"></script>
 </body>
 </html>

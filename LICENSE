@@ -9,9 +9,8 @@ ou criar obras derivadas, no todo ou em parte.
 O código deste simulador foi escrito do zero. A interação se inspira no simulador de circuitos do Prof. Paul Falstad
 (falstad.com/circuit, github.com/pfalstad/circuitjs1, licença GPL), mas nenhum código dele foi copiado.
 
-Componentes de terceiros previstos (ainda não incluídos), cada um com a sua licença, que deverá acompanhar o arquivo quando
-for incluído na pasta vendor/: ngspice (BSD modificada), eecircuit-engine (MIT), avr8js (MIT), rp2040js (MIT),
-clang/LLVM compilado para WebAssembly (Apache-2.0 com exceção LLVM).
+Componentes de terceiros incluídos na pasta vendor/, cada um com a sua licença ao lado (LICENSE.txt):
+JSCPP com lodash, pegjs-util e printf (MIT) e avr8js (MIT). Previstos: ngspice (BSD modificada) via eecircuit-engine (MIT) e rp2040js (MIT).
 
 Modelos SPICE de fabricantes que o usuário puser na pasta de modelos continuam sob os termos de cada fabricante.
 

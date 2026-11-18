@@ -33,24 +33,17 @@ Tudo roda no navegador: HTML, CSS e JavaScript puros, sem servidor e sem CDN. Qu
 - Os subcircuitos marcados como "parcial" passam a rodar aqui.
 - Protótipo a validar: transitório interativo pelo ngspice compartilhado (`bg_halt`/`alter`/`bg_resume`).
 
-## 4. Bloco Microcontrolador (firmware em C) — a fazer
-Bloco com pinos (GPIO, ADC, PWM, UART, VCC, GND) ligado ao circuito. A cada passo do motor:
-- pino de saída = fonte de tensão com resistência de saída (VOH/VOL);
-- pino de entrada = alta impedância, lido com limiares VIH/VIL (digital) ou pelo ADC (analógico, com Vref e resolução).
+## 4. Bloco Microcontrolador (`js/mcu.js`) — feito
+Os pinos viram primitivos `PINO` no motor: saída = fonte (ideal ou com Rout), entrada = corrente zero (com pull-up opcional).
+Depois de cada passo do motor, o gerente lê as tensões dos pinos, avança o firmware pelo tempo `dt` e acerta os pinos para o passo seguinte.
 
-O firmware avança em sincronia com o tempo simulado (passo do motor = quantum do microcontrolador). Dois modos:
+**Modo A — firmware em C.** Interpretado pelo JSCPP (`vendor/jscpp`, MIT) como gerador: cada `next()` é um passo do
+interpretador; o bloco anda "instruções por segundo" × dt passos por passo do motor, e `delay()` só espera o tempo simulado.
+HAL estilo Arduino em `microcontrolador.h` (incluído sozinho): `pinMode`, `digitalWrite`, `digitalRead`, `analogRead`,
+`analogWrite` (PWM 490 Hz), `delay`, `delayMicroseconds`, `millis`, `micros`, `map`, `constrain`, `random`, `printf`.
+Escolhi o interpretador em vez do clang em WebAssembly (~30 MB): abre na hora e dá o erro com a linha do código.
 
-**A. C nativo (recomendado para começar e para as aulas).** O código C do aluno é compilado no próprio navegador para
-WebAssembly (clang/LLVM em WebAssembly, carregado só quando o bloco é usado, de `vendor/`), junto com uma HAL simples:
-`pinMode`, `digitalWrite`, `digitalRead`, `analogRead`, `analogWrite` (PWM), `millis`, `micros`, `delay`, `delayMicroseconds`,
-`uart_print` e interrupções por pino e por timer. O firmware roda num Web Worker:
-`delay()` devolve o controle ao simulador até o tempo simulado chegar lá (Asyncify ou SharedArrayBuffer + Atomics; no GitHub
-Pages o SharedArrayBuffer exige os cabeçalhos COOP/COEP, que um service worker resolve).
-Velocidade nativa, qualquer C, sem depender de um chip específico.
+**Modo B — Arduino Uno.** ATmega328P emulado pelo avr8js (`vendor/avr8js`, MIT): GPIO (PORTB/C/D), timers 0/1/2, USART
+(monitor serial) e ADC, com o .hex do Arduino IDE. Roda ~8 milhões de ciclos por segundo real no Node (metade do tempo real a 16 MHz).
 
-**B. Emulação do chip (para firmware real).** Roda o `.hex`/`.elf` gerado pelo Arduino IDE ou avr-gcc, instrução por
-instrução, com os periféricos do chip: ATmega328P (Arduino Uno) com o avr8js (MIT) e RP2040 com o rp2040js (MIT).
-Precisão de ciclo; o arquivo compilado é enviado pelo usuário (compilar no navegador fica para depois).
-
-Etapas: (1) bloco com pinos e HAL escrita em JS para testar a ponte com o motor; (2) modo A com clang em WebAssembly;
-(3) modo B com avr8js; (4) monitor serial e osciloscópio dos pinos.
+Próximo: RP2040 (rp2040js) e compilar .ino no navegador.

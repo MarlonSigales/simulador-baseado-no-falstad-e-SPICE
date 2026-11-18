@@ -21,6 +21,7 @@
 
     const App = {
         lib: new window.Biblioteca(),
+        gerente: new window.MCU.Gerente(),
         motor: null, net: null,
         rodando: true,
         dt: 10e-6,
@@ -78,7 +79,7 @@
 
         // ------------------------------------------------------------ circuito
         novoId(tipo) {
-            const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', potenciometro: 'P', eletrolitico: 'C', chave2: 'S', transformador: 'T', lampada: 'LP', rele: 'K', amperimetro: 'AM', entradaLogica: 'IN', saidaLogica: 'OUT', rotuloNo: 'LBL', texto: 'TXT', porta_not: 'U', porta_and: 'U', porta_nand: 'U', porta_or: 'U', porta_nor: 'U', porta_xor: 'U', porta_xnor: 'U', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' }[tipo] || 'E';
+            const letra = { fio: 'W', resistor: 'R', capacitor: 'C', indutor: 'L', chave: 'S', fonteV: 'V', trilho: 'V', fonteI: 'I', terra: 'GND', diodo: 'D', zener: 'DZ', led: 'LED', mcu: 'MCU', arduino: 'UNO', potenciometro: 'P', eletrolitico: 'C', chave2: 'S', transformador: 'T', lampada: 'LP', rele: 'K', amperimetro: 'AM', entradaLogica: 'IN', saidaLogica: 'OUT', rotuloNo: 'LBL', texto: 'TXT', porta_not: 'U', porta_and: 'U', porta_nand: 'U', porta_or: 'U', porta_nor: 'U', porta_xor: 'U', porta_xnor: 'U', npn: 'Q', pnp: 'Q', nmos: 'M', pmos: 'M', ampop: 'U', caixa: 'X', voltimetro: 'VM' }[tipo] || 'E';
             let n = 1;
             const usados = new Set(this.ed.els.map((e) => e.id));
             while (usados.has(letra + n)) n++;
@@ -120,6 +121,9 @@
                 this.net = Circ.construir(this.ed.els, this.lib);
                 this.motor = new window.MotorSim.Motor(this.net, estados);
                 this.motor.t = t;
+                // microcontroladores: o firmware anda junto com o tempo simulado, depois de cada passo do motor
+                this.gerente.sincronizar(this.ed.els);
+                this.motor.aoPasso = (m) => this.gerente.passo(m, this.net, m.dtUlt);
                 this.avisos = this.net.avisos;
             } catch (e) {
                 this.motor = null; this.erro = e.message;
@@ -128,6 +132,7 @@
         },
         reiniciar() {
             this.motor = null;
+            this.gerente.reiniciar();
             this.limparOsc();
             this.reconstruir();
         },
@@ -147,7 +152,7 @@
             const pp = this.net.papeis && this.net.papeis[el.id];
             const prims = {};
             if (pp) Object.entries(pp).forEach(([k, nm]) => { prims[k] = this.motor.prim(nm); });
-            return { v, i, cor: vazio.cor, prim: p, prims };
+            return { v, i, cor: vazio.cor, prim: p, prims, mcu: C.DEFS[el.tipo].criarExecucao ? this.gerente.estado(el.id) : null };
         },
         /**
          * Tensão de um bipolo como no Falstad: v(p0) − v(p1), de modo que V·I > 0 = potência consumida.
@@ -356,8 +361,6 @@
                 itens.forEach(([k, d]) => html.push(`<button type="button" class="sidebar-link ferramenta" data-ferramenta="${k}">
                     <span class="sidebar-num">${esc(d.icone || (d.curto || d.nome)[0])}</span>${esc(d.curto || d.nome)}${d.tecla ? ` <kbd>${d.tecla}</kbd>` : ''}</button>`));
             });
-            html.push(`<span class="sidebar-grupo">Em breve</span>
-                <span class="sidebar-link sidebar-futuro" title="Bloco que roda firmware em C (ver ARQUITETURA.md)"><span class="sidebar-num">μ</span>Microcontrolador (C)</span>`);
             nav.innerHTML = html.join('');
             nav.addEventListener('click', (ev) => {
                 const b = ev.target.closest('[data-ferramenta]');
@@ -402,6 +405,15 @@
                 if (t) { this.osc.splice(+t.dataset.tirarOsc, 1); this.listarOsc(); }
             });
             $('#abrir-json').addEventListener('change', (ev) => this.abrirArquivoCircuito(ev.target));
+            $('#abrir-hex').addEventListener('change', (ev) => {
+                const f = ev.target.files[0], el = this.ed.selecionado(); ev.target.value = '';
+                if (!f || !el) return;
+                f.text().then((t) => { this.antes(); el.props.hex = t; el.props.nomeHex = f.name; this.mudouValor(el); const st = this.gerente.estado(el.id); this.aviso(st && st.erro ? 'Erro no .hex: ' + st.erro : `${f.name} carregado no ${el.id}.`); });
+            });
+            $('#fw-codigo').addEventListener('keydown', (ev) => {
+                if (ev.key === 'Tab') { ev.preventDefault(); const t = ev.target, i = t.selectionStart; t.value = t.value.slice(0, i) + '  ' + t.value.slice(t.selectionEnd); t.selectionStart = t.selectionEnd = i + 2; }
+                if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') { ev.preventDefault(); this.carregarFirmware(); }
+            });
             this.listarOsc();
         },
         atualizarBotaoRodar() {
@@ -418,6 +430,11 @@
                 case 'zoom-mais': this.ed.zoom(1.25); break;
                 case 'zoom-menos': this.ed.zoom(0.8); break;
                 case 'centralizar': this.enquadrar(); break;
+                case 'editar-firmware': if (sel) this.abrirFirmware(sel); break;
+                case 'firmware-carregar': this.carregarFirmware(); break;
+                case 'firmware-fechar': $('#dlg-firmware').close(); break;
+                case 'carregar-hex': $('#abrir-hex').click(); break;
+                case 'hex-exemplo': if (sel) { this.antes(); sel.props.hex = window.MCU.HEX_PISCA; sel.props.nomeHex = 'pisca-d13.hex (exemplo)'; this.mudouValor(sel); } break;
                 case 'area-grande': document.body.classList.toggle('area-grande'); setTimeout(() => this.enquadrar(), 50); break;
                 case 'tela-cheia': {
                     const c = $('.sim-tela-card');
@@ -510,6 +527,10 @@
             const html = (c) => {
                 const id = `campo-${c.k}`;
                 const v = el.props[c.k];
+                if (c.tipo === 'firmware') return `<div class="campo"><span>${esc(c.r)}</span><button type="button" class="btn btn-primary btn-sm" data-acao="editar-firmware">✎ Editar o firmware</button></div>`;
+                if (c.tipo === 'hex') return `<div class="campo"><span>${esc(c.r)}: <b>${esc(el.props.nomeHex || (v ? 'carregado' : 'nenhum'))}</b></span>
+                    <span class="prop-botoes"><button type="button" class="btn btn-primary btn-sm" data-acao="carregar-hex">📂 Abrir .hex</button><button type="button" class="btn btn-secondary btn-sm" data-acao="hex-exemplo">Exemplo: pisca D13</button></span>
+                    <small class="dica-campo">No Arduino IDE: Sketch → Exportar binário compilado (use o .hex sem "with_bootloader").</small></div>`;
                 if (c.tipo === 'faixa') return `<label class="campo"><span>${esc(c.r)}: <b data-faixa-txt="${c.k}">${Math.round((parseFloat(v) || 0) * 100)} %</b></span><input type="range" min="0" max="1" step="0.01" id="${id}" data-faixa="${c.k}" value="${esc(v)}"></label>`;
                 if (c.tipo === 'bool') return `<label class="campo campo-bool"><input type="checkbox" id="${id}" data-campo="${c.k}" ${v ? 'checked' : ''}> ${esc(c.r)}</label>`;
                 if (c.tipo === 'sel') return `<label class="campo"><span>${esc(c.r)}</span><select id="${id}" data-campo="${c.k}">${c.op.map(([o, t]) => `<option value="${esc(o)}" ${o === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
@@ -541,8 +562,9 @@
             const leitura = d.bipolo
                 ? `<dl class="leitura"><dt>Tensão</dt><dd id="lei-v">${S.formatar(vv, 'V')}</dd><dt>Corrente</dt><dd id="lei-i">${S.formatar(inf.i, 'A')}</dd><dt>Potência</dt><dd id="lei-p">${S.formatar(Math.abs(vv * inf.i), 'W')}</dd></dl>`
                 : `<dl class="leitura">${(d.nomesPinos || (d.nomesPinosDe ? d.nomesPinosDe(el, this.lib) : ['pino'])).map((n, i) => `<dt>${esc(n)}</dt><dd>${S.formatar(inf.v[i], 'V')}</dd>`).join('')}</dl>`;
+            const serial = d.criarExecucao ? `<div class="campo"><span>Monitor serial (printf / Serial)</span><pre class="serial" id="serial-mon"></pre><p class="aviso-txt" id="mcu-erro"></p></div>` : '';
             box.innerHTML = `<div class="prop-topo"><b>${esc(el.id)}</b> <span>${esc(d.nome)}</span></div>
-                ${linhas}
+                ${linhas}${serial}
                 ${leitura}
                 <div class="prop-botoes">
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="osc-v">📈 No osciloscópio (V)</button>
@@ -574,6 +596,13 @@
         },
         atualizarLeitura() {
             const el = this.ed.selecionado();
+            const mon = $('#serial-mon');
+            if (el && mon) {
+                const st = this.gerente.estado(el.id);
+                const txt = st ? st.serial : '';
+                if (mon.textContent !== txt) { mon.textContent = txt; mon.scrollTop = mon.scrollHeight; }
+                $('#mcu-erro').textContent = st && st.erro ? '⚠ ' + st.erro : (C.DEFS[el.tipo].tipo === 'arduino' && !el.props.hex ? '' : '');
+            }
             if (!el || !C.DEFS[el.tipo].bipolo) return;
             const inf = this.info(el), vv = this.tensaoEl(el, inf);
             const a = $('#lei-v'); if (!a) return;
@@ -665,6 +694,25 @@
             this.ed.selecionarSo(el); this.selecionou(el); this.mudouTopologia();
         },
 
+        // ------------------------------------------------------------ microcontrolador
+        abrirFirmware(el) {
+            this.firmwareEl = el.id;
+            $('#fw-titulo').textContent = `Firmware de ${el.id}`;
+            $('#fw-codigo').value = el.props.firmware || '';
+            $('#fw-msg').textContent = ''; $('#fw-msg').className = 'fw-msg';
+            $('#dlg-firmware').showModal();
+        },
+        carregarFirmware() {
+            const el = this.ed.el(this.firmwareEl);
+            if (!el) return;
+            this.antes();
+            el.props.firmware = $('#fw-codigo').value;
+            this.mudouValor(el);
+            const st = this.gerente.estado(el.id), msg = $('#fw-msg');
+            if (st && st.erro) { msg.textContent = '⚠ ' + st.erro; msg.className = 'fw-msg erro'; }
+            else { msg.textContent = '✔ Firmware carregado: rodando junto com a simulação.'; msg.className = 'fw-msg ok'; }
+        },
+
         // ------------------------------------------------------------ arquivos
         dados() { return { formato: 'simulador-falstad-spice', versao: 1, els: this.ed.els.map((e) => { const c = Object.assign({}, e); delete c._fase; return c; }), dt: this.dt, velocidade: this.velocidade, osc: this.osc.map((o) => ({ el: o.el, g: o.g, escala: o.escala, pos: o.pos })), oscN: this.oscN, oscTdiv: this.oscTdiv, oscTrig: this.oscTrig, oscNivel: this.oscNivel }; },
         guardar() { clearTimeout(this._g); this._g = setTimeout(() => salvarLS(CHAVE_CIRCUITO, this.dados()), 300); },
@@ -691,7 +739,7 @@
             if (!ex) return;
             this.antes();
             const els = Ex.comIds(ex.els);
-            this.abrirDados({ els, dt: ex.passo, velocidade: '0.01', osc: (ex.osc || []).map((o) => ({ el: els[o.el].id, g: o.g })), oscN: 5 });
+            this.abrirDados({ els, dt: ex.passo, velocidade: ex.velocidade || '0.01', osc: (ex.osc || []).map((o) => ({ el: els[o.el].id, g: o.g })), oscN: 5 });
             this.rodando = true; this.atualizarBotaoRodar();
             this.aviso(ex.dica);
         },

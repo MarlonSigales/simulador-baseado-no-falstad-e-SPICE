@@ -109,7 +109,7 @@
             this.naoLineares = false;
             this.prims.forEach((p) => {
                 porNome[p.nome] = p;
-                if (['V', 'E', 'H', 'OP', 'VD'].includes(p.tipo)) p.ramo = ramo++;
+                if (['V', 'E', 'H', 'OP', 'VD', 'PINO'].includes(p.tipo)) p.ramo = ramo++;
                 if (p.tipo === 'K2') {
                     // indutores acoplados: Γ = inversa de [[L1, M], [M, L2]]
                     const det = p.L1 * p.L2 - p.M * p.M;
@@ -128,7 +128,7 @@
                     this.naoLineares = true;
                 }
                 if (p.tipo === 'OP' || p.tipo === 'RLIM') this.naoLineares = true;
-                if (p.tipo === 'VD' || p.tipo === 'RELE') this.temDigitais = true;
+                if (p.tipo === 'VD' || p.tipo === 'RELE' || p.tipo === 'PINO') this.temDigitais = true;
                 if (p.tipo === 'RELE') { const e = estadoAnterior && estadoAnterior[p.nome]; p.ligado = e ? e.ligado : false; }
                 if (p.tipo === 'C' || p.tipo === 'L') {
                     const e = estadoAnterior && estadoAnterior[p.nome];
@@ -176,6 +176,7 @@
             if (!convergiu) this.naoConvergiu++;
             this.aceitar(dt, t1);
             this.t = t1;
+            this.dtUlt = dt;
             if (this.temDigitais) this.digitais();
             return convergiu;
         }
@@ -227,6 +228,15 @@
                         const k = N + e.ramo;
                         ar(p, k, 1); ar(q, k, -1); ra(k, p, 1); ra(k, q, -1);
                         b[k] = e.saida;
+                        break;
+                    }
+                    case 'PINO': {
+                        // pino de microcontrolador: saída = fonte (ideal ou com Rout); entrada = corrente zero (+ pull-up)
+                        const k = N + e.ramo;
+                        if (e.modo === 'saida' && !(e.rout > 0)) { ar(p, k, 1); ra(k, p, 1); b[k] = e.valor; break; }
+                        A[k * n + k] = 1; b[k] = 0;
+                        const g = e.modo === 'saida' ? 1 / e.rout : e.modo === 'pullup' ? 1 / e.rpu : 0;
+                        if (g) { a(p, p, g); if (p > 0) b[p - 1] += g * (e.modo === 'saida' ? e.valor : e.vdd); }
                         break;
                     }
                     case 'K2': {
@@ -369,6 +379,11 @@
                     case 'F': e.i = e.valor * this.x[N + e.ramoRef]; break;
                     case 'D': e.i = e.id; break;
                     case 'VD': e.i = -this.x[N + e.ramo]; break;
+                    case 'PINO': {
+                        const vp = this.v(p);
+                        e.i = e.modo === 'saida' ? (e.rout > 0 ? (e.valor - vp) / e.rout : -this.x[N + e.ramo]) : e.modo === 'pullup' ? (e.vdd - vp) / e.rpu : 0;
+                        break;
+                    }
                     case 'LAMP': {
                         const R = this.rLampada(e); e.i = v / R;
                         const P = v * v / R;
